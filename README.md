@@ -350,7 +350,7 @@ docker-compose -f docker-compose.dev.yml up
 ## 📮 联系我们 / Contact
 
 - 项目主页: [https://github.com/miniriceai/LangCoach](https://github.com/miniriceai/LangCoach)
-- 问题反馈: [GitHub Issues](https://github.com/LangCoach/LangCoach/issues)
+- 问题反馈: [GitHub Issues](https://github.com/MiniriceAI/LangCoach/issues)
 
 ---
 

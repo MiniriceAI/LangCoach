@@ -27,29 +27,35 @@ def restart_vocab_study_chatbot():
     """
     重置词汇学习会话：
     1. 清除会话历史
-    2. 开启新话题
-    3. 返回新的初始消息
+    2. 开启新话题，让 LLM 生成新的 5 个单词
+    3. 返回新的初始消息列表
+    
+    返回:
+        list: 包含初始 AI 消息（新单词介绍）的消息列表
     """
     LOG.info("[Vocab] 重置会话，开始新的一关")
-    vocab_agent.restart_session()  # 重启会话，清除历史
-
-    # 定义初始消息并与词汇代理交互生成机器人的回应
-    _next_round = "Let's do it"
-    bot_message = vocab_agent.chat_with_history(_next_round)
-    LOG.info(f"[Vocab] 新话题开始，AI回复: {bot_message[:50]}...")
+    
+    # 清除会话历史，确保每次重启都是全新的会话
+    vocab_agent.restart_session()
+    
+    # 根据 prompt 文件，LLM 会在收到 "Let's do it" 时开始生成新的单词
+    # 但为了更明确，我们直接让 LLM 生成新单词介绍
+    # 使用 prompt 中定义的初始触发词
+    initial_message = "Let's do it"
+    bot_message = vocab_agent.chat_with_history(initial_message)
+    
+    LOG.info(f"[Vocab] 新话题开始，AI回复长度: {len(bot_message)} 字符")
+    LOG.debug(f"[Vocab] AI回复预览: {bot_message[:200]}...")
 
     # Gradio 6.0.0 使用字典格式的消息
-    # 返回新的初始消息列表，这会替换聊天机器人中的所有历史消息
-    return [
-        {"role": "user", "content": _next_round},
+    # 返回新的初始消息列表，这会完全替换聊天机器人中的所有历史消息
+    # 包括用户消息和 AI 回复（新单词介绍）
+    new_chat_history = [
+        {"role": "user", "content": initial_message},
         {"role": "assistant", "content": bot_message}
     ]
-
-# 处理用户输入的单词学习消息，并与词汇代理互动获取机器人的响应
-def handle_vocab(user_input, chat_history):
-    bot_message = vocab_agent.chat_with_history(user_input)  # 获取机器回复
-    LOG.info(f"[Vocab ChatBot]: {bot_message}")  # 记录机器人回应信息
-    return bot_message
+    
+    return new_chat_history
 
 # 创建词汇学习的 Tab 界面
 def create_vocab_tab():
@@ -62,24 +68,68 @@ def create_vocab_tab():
 
         # 初始化一个聊天机器人组件，设置占位符文本和高度
         vocab_study_chatbot = gr.Chatbot(
-            placeholder="<strong>你的英语私教 LangCoach</strong><br><br>开始学习新单词吧！",
-            height=800,
+            placeholder="<strong>你的英语私教 LangCoach</strong><br><br>点击「下一关」开始学习新单词！",
+            height=600,
+            value=None,  # 初始值为空
         )
 
         # 创建一个按钮，用于重置词汇学习状态，值为“下一关”
-        restart_btn = gr.Button(value="下一关", variant="secondary")
+        restart_btn = gr.Button(value="下一关", variant="primary", size="lg")
 
-        # 当用户点击按钮时，调用 restart_vocab_study_chatbot 函数
-        # 这会清除聊天历史、重置会话并开启新话题
+        # 手动创建聊天输入框和发送按钮
+        with gr.Row():
+            vocab_input = gr.Textbox(
+                placeholder="输入你的消息...",
+                label="消息",
+                scale=9,
+                container=False,
+            )
+            vocab_submit_btn = gr.Button("发送", variant="primary", scale=1, min_width=100)
+
+        # 当用户点击「下一关」按钮时，重置会话并生成新的单词
         restart_btn.click(
             fn=restart_vocab_study_chatbot,
-            inputs=None,
-            outputs=vocab_study_chatbot,
+            inputs=[],  # 空列表表示没有输入
+            outputs=vocab_study_chatbot,  # 输出到聊天机器人组件
         )
 
-        # 创建聊天接口，包含处理用户消息的函数，并关联聊天机器人组件
-        gr.ChatInterface(
-            fn=handle_vocab,  # 处理用户输入的函数
-            chatbot=vocab_study_chatbot,  # 关联的聊天机器人组件
-            submit_btn="发送",  # 发送按钮的文本
+        # 处理用户消息的函数
+        def on_message_submit(user_input, chat_history):
+            """处理用户提交的消息"""
+            if not user_input or not user_input.strip():
+                return chat_history or [], ""
+            
+            LOG.debug("[Vocab] User message submitted")
+            
+            # 确保 chat_history 不为 None
+            if chat_history is None:
+                chat_history = []
+            
+            # 创建新的聊天历史列表（避免直接修改原列表）
+            new_chat_history = list(chat_history) if chat_history else []
+            
+            # 添加用户消息到聊天历史
+            new_chat_history.append({"role": "user", "content": user_input.strip()})
+            
+            # 获取AI回复
+            bot_message = vocab_agent.chat_with_history(user_input.strip())
+            
+            # 添加AI回复到聊天历史
+            new_chat_history.append({"role": "assistant", "content": bot_message})
+            
+            LOG.debug(f"[Vocab] Chat history updated, length: {len(new_chat_history)}")
+            return new_chat_history, ""  # 返回更新后的聊天历史和清空的输入框
+        
+        # 绑定提交事件
+        vocab_submit_btn.click(
+            fn=on_message_submit,
+            inputs=[vocab_input, vocab_study_chatbot],
+            outputs=[vocab_study_chatbot, vocab_input],
+        )
+        
+        # 也支持回车键提交
+        vocab_input.submit(
+            fn=on_message_submit,
+            inputs=[vocab_input, vocab_study_chatbot],
+            outputs=[vocab_study_chatbot, vocab_input],
         )

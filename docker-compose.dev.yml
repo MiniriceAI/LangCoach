@@ -1,0 +1,35 @@
+# 开发环境配置
+services:
+  langcoach-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # 使用构建阶段进行开发
+    container_name: langcoach-dev
+    ports:
+      - "7860:7860"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b-instruct-q8_0}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # 挂载源代码，支持热重载
+      - ./src:/app/src
+      - ./content:/app/content
+      - ./prompts:/app/prompts
+      - ./logs:/app/logs
+      # 排除不需要挂载的目录
+      - /app/src/__pycache__
+      - /app/.pytest_cache
+    command: python src/main.py
+    restart: unless-stopped
+    networks:
+      - langcoach-network
+
+networks:
+  langcoach-network:
+    driver: bridge
+

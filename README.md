@@ -61,12 +61,6 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 ### 在线体验 / Live Demo  
 点击体验: <a href="http://34.207.175.3:7860/" target="_blank">http://34.207.175.3:7860/</a>
 
-### 场景对话练习
-![场景对话练习](images/checkin1.png)
-
-### 对话反馈
-![对话反馈](images/checkin2.png)
-
 ## 🏗️ 技术架构 / Architecture
 
 ```

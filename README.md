@@ -330,25 +330,6 @@ docker-compose -f docker-compose.dev.yml up
 - 使用类型提示（Type Hints）
 - 编写清晰的文档字符串（Docstrings）
 
-## 🤝 贡献指南 / Contributing
-
-我们欢迎所有形式的贡献！请遵循以下步骤：
-
-1. **Fork 本仓库**
-2. **创建特性分支** (`git checkout -b feature/AmazingFeature`)
-3. **提交更改** (`git commit -m 'Add some AmazingFeature'`)
-4. **推送到分支** (`git push origin feature/AmazingFeature`)
-5. **开启 Pull Request**
-
-### 贡献类型 / Types of Contributions
-
-- 🐛 修复 Bug
-- ✨ 添加新功能
-- 📝 改进文档
-- 🎨 UI/UX 优化
-- ⚡ 性能优化
-- 🧪 增加测试覆盖率
-
 ## 📝 许可证 / License
 
 本项目采用 [Apache License 2.0](LICENSE) 许可证。

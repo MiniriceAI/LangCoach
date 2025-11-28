@@ -49,7 +49,7 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 
 ## 🖼️ 功能演示 / Screenshots
 ### 在线体验 / Live Demo  
-Have a try: [http://34.207.175.3:7860/](http://34.207.175.3:7860/)
+点击体验: <a href="http://34.207.175.3:7860/" target="_blank">http://34.207.175.3:7860/</a>
 
 ### 场景对话练习
 ![场景对话练习](images/checkin1.png)

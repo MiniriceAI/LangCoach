@@ -53,13 +53,9 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 
 <div align="center">
 
-**观看完整演示视频**
+**点击观看完整演示视频**
 
 [![LangCoach Demo Video](https://img.youtube.com/vi/ntxbJ3Cagb8/maxresdefault.jpg)](https://youtu.be/ntxbJ3Cagb8)
-
-<p>
-  <strong>🎬 <a href="https://youtu.be/ntxbJ3Cagb8" target="_blank">在 YouTube 观看完整演示视频</a></strong>
-</p>
 
 </div>
 

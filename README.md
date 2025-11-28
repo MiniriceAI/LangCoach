@@ -48,6 +48,16 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 - 会话历史管理
 
 ## 🖼️ 功能演示 / Screenshots
+
+### 📹 视频介绍 / Video Demo
+<div align="center">
+  <video width="800" controls>
+    <source src="images/langcoach.mp4" type="video/mp4">
+    您的浏览器不支持视频标签，请使用现代浏览器查看。
+  </video>
+</div>
+
+
 ### 在线体验 / Live Demo  
 点击体验: <a href="http://34.207.175.3:7860/" target="_blank">http://34.207.175.3:7860/</a>
 

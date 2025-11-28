@@ -65,22 +65,28 @@ class TestScenarioAgent:
 
     @patch('src.agents.scenario_agent.AgentBase.__init__')
     @patch('src.agents.scenario_agent.get_session_history')
-    def test_start_new_session_existing_history(self, mock_get_history, mock_base_init):
-        """Test start_new_session with existing history"""
+    @patch('src.agents.scenario_agent.random.choice')
+    def test_start_new_session_existing_history(self, mock_choice, mock_get_history, mock_base_init):
+        """Test start_new_session with existing history - should clear history and start new session"""
         mock_base_init.return_value = None
         mock_history = MagicMock()
         mock_message = MagicMock()
         mock_message.content = "Last message"
-        mock_history.messages = [mock_message]
+        mock_history.messages = [mock_message]  # 模拟已有历史记录
         mock_get_history.return_value = mock_history
         
         agent = ScenarioAgent("test_scenario")
+        agent.intro_messages = ["Message 1", "Message 2", "Message 3"]  # 设置 intro_messages
         agent.session_id = "test_session"
+        
+        mock_choice.return_value = "Message 2"
         
         result = agent.start_new_session()
         
-        assert result == "Last message"
-        mock_history.add_message.assert_not_called()
+        # 现在总是清除历史并创建新会话
+        assert result == "Message 2"
+        mock_history.clear.assert_called_once()  # 应该清除历史
+        mock_history.add_message.assert_called_once()  # 应该添加新的初始消息
 
     @patch('src.agents.scenario_agent.AgentBase.__init__')
     @patch('src.agents.scenario_agent.get_session_history')

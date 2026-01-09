@@ -7,6 +7,7 @@ from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
 
 from src.agents.scenario_agent import ScenarioAgent
+from src.agents.conversation_config import ConversationConfig, DifficultyLevel, create_config
 from langchain_core.messages import AIMessage
 
 
@@ -21,18 +22,18 @@ class TestScenarioAgent:
         prompt_file = tmp_path / "prompts" / "test_scenario_prompt.txt"
         prompt_file.parent.mkdir(parents=True)
         prompt_file.write_text("Test prompt")
-        
+
         intro_file = tmp_path / "content" / "intro" / "test_scenario.json"
         intro_file.parent.mkdir(parents=True)
         intro_file.write_text(json.dumps(["Intro 1", "Intro 2"]), encoding="utf-8")
-        
+
         mock_base_init.return_value = None
         mock_history = MagicMock()
         mock_history.messages = []
         mock_get_history.return_value = mock_history
-        
+
         agent = ScenarioAgent("test_scenario")
-        
+
         # Verify parent init was called with correct paths
         mock_base_init.assert_called_once()
         call_kwargs = mock_base_init.call_args[1]
@@ -42,23 +43,23 @@ class TestScenarioAgent:
     @patch('src.agents.scenario_agent.AgentBase.__init__')
     @patch('src.agents.scenario_agent.get_session_history')
     @patch('src.agents.scenario_agent.random.choice')
-    def test_start_new_session_empty_history(self, mock_choice, mock_get_history, 
+    def test_start_new_session_empty_history(self, mock_choice, mock_get_history,
                                             mock_base_init, tmp_path):
         """Test start_new_session with empty history"""
         mock_base_init.return_value = None
         mock_history = MagicMock()
         mock_history.messages = []
         mock_get_history.return_value = mock_history
-        
+
         # Create agent with mocked intro messages
         agent = ScenarioAgent("test_scenario")
         agent.intro_messages = ["Message 1", "Message 2", "Message 3"]
         agent.session_id = "test_session"
-        
+
         mock_choice.return_value = "Message 2"
-        
+
         result = agent.start_new_session()
-        
+
         assert result == "Message 2"
         mock_history.add_message.assert_called_once()
         assert isinstance(mock_history.add_message.call_args[0][0], AIMessage)
@@ -74,15 +75,15 @@ class TestScenarioAgent:
         mock_message.content = "Last message"
         mock_history.messages = [mock_message]  # 模拟已有历史记录
         mock_get_history.return_value = mock_history
-        
+
         agent = ScenarioAgent("test_scenario")
         agent.intro_messages = ["Message 1", "Message 2", "Message 3"]  # 设置 intro_messages
         agent.session_id = "test_session"
-        
+
         mock_choice.return_value = "Message 2"
-        
+
         result = agent.start_new_session()
-        
+
         # 现在总是清除历史并创建新会话
         assert result == "Message 2"
         mock_history.clear.assert_called_once()  # 应该清除历史
@@ -96,12 +97,58 @@ class TestScenarioAgent:
         mock_history = MagicMock()
         mock_history.messages = []
         mock_get_history.return_value = mock_history
-        
+
         agent = ScenarioAgent("test_scenario")
         agent.intro_messages = ["Message 1"]
-        
+
         with patch('src.agents.scenario_agent.random.choice', return_value="Message 1"):
             agent.start_new_session(session_id="custom_session")
-        
+
         mock_get_history.assert_called_with("custom_session")
+
+
+class TestScenarioAgentWithConfig:
+    """Test cases for ScenarioAgent with ConversationConfig (Phase 1)"""
+
+    @patch('src.agents.scenario_agent.AgentBase.__init__')
+    @patch('src.agents.scenario_agent.get_session_history')
+    def test_init_with_config(self, mock_get_history, mock_base_init):
+        """Test ScenarioAgent initialization with custom config"""
+        mock_base_init.return_value = None
+        mock_history = MagicMock()
+        mock_history.messages = []
+        mock_get_history.return_value = mock_history
+
+        custom_config = create_config(turns=30, difficulty="advanced")
+
+        agent = ScenarioAgent("test_scenario", config=custom_config)
+
+        # Verify parent init was called with config
+        mock_base_init.assert_called_once()
+        call_kwargs = mock_base_init.call_args[1]
+        assert call_kwargs["config"] == custom_config
+
+    @patch('src.agents.scenario_agent.AgentBase.__init__')
+    @patch('src.agents.scenario_agent.AgentBase.update_config')
+    @patch('src.agents.scenario_agent.get_session_history')
+    @patch('src.agents.scenario_agent.random.choice')
+    def test_start_new_session_with_config(self, mock_choice, mock_get_history,
+                                           mock_update_config, mock_base_init):
+        """Test start_new_session with new config"""
+        mock_base_init.return_value = None
+        mock_history = MagicMock()
+        mock_history.messages = []
+        mock_get_history.return_value = mock_history
+
+        agent = ScenarioAgent("test_scenario")
+        agent.intro_messages = ["Message 1"]
+        agent.session_id = "test_session"
+
+        mock_choice.return_value = "Message 1"
+
+        new_config = create_config(turns=50, difficulty="primary")
+        agent.start_new_session(config=new_config)
+
+        # Verify update_config was called with new config
+        mock_update_config.assert_called_once_with(new_config)
 

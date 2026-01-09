@@ -5,6 +5,7 @@ langchain_openai==0.1.25
 langchain_ollama==0.1.3
 gradio>=4.44.0
 loguru==0.7.2
+Jinja2>=3.1.0
 
 # Testing dependencies
 pytest>=7.4.0

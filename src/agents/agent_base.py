@@ -1,36 +1,87 @@
 import json
 from abc import ABC, abstractmethod
+from typing import Optional
 
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # 导入提示模板相关类
 from langchain_core.messages import HumanMessage  # 导入消息类
 from langchain_core.runnables.history import RunnableWithMessageHistory  # 导入带有消息历史的可运行类
 
 from .session_history import get_session_history  # 导入会话历史相关方法
 from .llm_factory import create_llm  # 导入 LLM 工厂函数
+from .conversation_config import ConversationConfig, get_default_config
 from utils.logger import LOG  # 导入日志工具
+
 
 class AgentBase(ABC):
     """
     抽象基类，提供代理的共有功能。
+    支持 Jinja2 模板和会话配置。
     """
-    def __init__(self, name, prompt_file, intro_file=None, session_id=None):
+    def __init__(
+        self,
+        name,
+        prompt_file,
+        intro_file=None,
+        session_id=None,
+        config: Optional[ConversationConfig] = None,
+        template_dir: str = "prompts/templates"
+    ):
         self.name = name
         self.prompt_file = prompt_file
         self.intro_file = intro_file
         self.session_id = session_id if session_id else self.name
+        self.template_dir = template_dir
+        self._config = config if config else get_default_config()
+
+        # 初始化 Jinja2 环境
+        self._jinja_env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=False
+        )
+
         self.prompt = self.load_prompt()
         self.intro_messages = self.load_intro() if self.intro_file else []
         self.create_chatbot()
 
+    @property
+    def config(self) -> ConversationConfig:
+        """获取当前会话配置。"""
+        return self._config
+
+    def update_config(self, config: ConversationConfig):
+        """
+        更新会话配置并重新创建聊天机器人。
+
+        参数:
+            config (ConversationConfig): 新的会话配置
+        """
+        self._config = config
+        self.prompt = self.load_prompt()
+        self.create_chatbot()
+        LOG.info(f"[{self.name}] Config updated: turns={config.turns}, difficulty={config.difficulty.value}")
+
     def load_prompt(self):
         """
-        从文件加载系统提示语。
+        从 Jinja2 模板文件加载并渲染系统提示语。
+        如果模板不存在，回退到原始 txt 文件。
         """
+        # 尝试加载 Jinja2 模板
+        template_name = self.prompt_file.replace("prompts/", "").replace(".txt", ".j2")
         try:
-            with open(self.prompt_file, "r", encoding="utf-8") as file:
-                return file.read().strip()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"找不到提示文件 {self.prompt_file}!")
+            template = self._jinja_env.get_template(template_name)
+            template_vars = self._config.to_template_vars()
+            rendered_prompt = template.render(**template_vars)
+            LOG.debug(f"[{self.name}] Loaded Jinja2 template: {template_name}")
+            return rendered_prompt.strip()
+        except TemplateNotFound:
+            LOG.debug(f"[{self.name}] Jinja2 template not found, falling back to txt: {self.prompt_file}")
+            # 回退到原始 txt 文件
+            try:
+                with open(self.prompt_file, "r", encoding="utf-8") as file:
+                    return file.read().strip()
+            except FileNotFoundError:
+                raise FileNotFoundError(f"找不到提示文件 {self.prompt_file}!")
 
     def load_intro(self):
         """
@@ -56,7 +107,7 @@ class AgentBase(ABC):
 
         # 根据环境变量选择合适的 LLM 提供者
         llm = create_llm()
-        
+
         # 组合提示模板和 LLM
         self.chatbot = system_prompt | llm
 

@@ -41,6 +41,34 @@ def sample_intro_file(tmp_path):
     return str(intro_file)
 
 @pytest.fixture
+def sample_jinja2_template_dir(tmp_path):
+    """Create a sample Jinja2 templates directory for testing"""
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+
+    # Create a sample Jinja2 template
+    template_content = """**System Prompt**
+
+**Configuration:**
+- Conversation Length: {{ turns }} rounds
+- Difficulty Level: {{ difficulty_level }}
+
+**Role**: You are a helpful assistant.
+
+**Language Difficulty:**
+{{ difficulty_description }}
+- Vocabulary: {{ vocabulary_level }}
+- Grammar: {{ grammar_level }}
+- Speaking Speed: {{ speaking_speed }}
+
+**Task**: After **{{ turns }} rounds**, provide feedback.
+"""
+    template_file = templates_dir / "test_prompt.j2"
+    template_file.write_text(template_content, encoding="utf-8")
+
+    return str(templates_dir)
+
+@pytest.fixture
 def clean_session_store():
     """Clear session store before and after each test"""
     from src.agents.session_history import store

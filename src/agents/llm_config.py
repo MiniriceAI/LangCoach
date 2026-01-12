@@ -27,7 +27,7 @@ class LLMConfig:
     # 默认配置
     DEFAULT_PROVIDERS = {
         "ollama": {
-            "model": "unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL",
+            "model": "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q4_K_M",
             "base_url": "http://localhost:11434",
             "temperature": 0.8,
             "max_tokens": 8192,

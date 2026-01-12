@@ -200,3 +200,5 @@ temp/
 .docker/
 
 Changelog.md
+
+claude.md

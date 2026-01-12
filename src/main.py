@@ -2,9 +2,22 @@ import gradio as gr
 import os
 import sys
 import socket
+from pathlib import Path
+from dotenv import load_dotenv
 from tabs.scenario_tab import create_scenario_tab
 from tabs.vocab_tab import create_vocab_tab
 from utils.logger import LOG
+
+# 加载 .env 文件（如果存在）
+# 在项目根目录查找 .env 文件
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    LOG.info(f"✅ 已加载配置文件: {env_path}")
+else:
+    # 尝试从当前工作目录加载
+    load_dotenv()
+    LOG.debug("🔍 尝试从当前目录加载 .env 文件")
 
 def is_port_in_use(port):
     """检查端口是否被占用"""

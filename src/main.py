@@ -41,7 +41,7 @@ with gr.Blocks(title="LangCoach 英语私教") as demo:
 
 if __name__ == "__main__":
     # 从环境变量获取端口
-    port = int(os.getenv('GRADIO_PORT', '7860'))
+    port = int(os.getenv('GRADIO_PORT', '8300'))
     force_restart = '--force' in sys.argv or os.getenv('GRADIO_FORCE_RESTART', '').lower() == 'true'
 
     # 检查命令行参数（排除 --force）
@@ -50,8 +50,8 @@ if __name__ == "__main__":
         try:
             port = int(args[0])
         except ValueError:
-            print(f"⚠️ 无效的端口号: {args[0]}，使用默认端口 7860")
-            port = 7860
+            print(f"⚠️ 无效的端口号: {args[0]}，使用默认端口 8300")
+            port = 8300
 
     # 检查端口是否被占用
     if is_port_in_use(port):

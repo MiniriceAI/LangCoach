@@ -200,6 +200,23 @@ python src/main.py
 
 应用启动后，在浏览器中访问 `http://localhost:7860` 开始使用。
 
+**高级启动选项 / Advanced Options**:
+
+```bash
+# 指定端口
+python src/main.py 7861
+
+# 强制重启（自动停止占用端口的旧进程）
+python src/main.py --force
+
+# 指定端口并强制重启
+python src/main.py 7861 --force
+
+# 使用环境变量配置
+GRADIO_PORT=7861 python src/main.py
+GRADIO_FORCE_RESTART=true python src/main.py
+```
+
 ### 方式二：Docker 部署 / Docker Deployment
 
 #### 使用 Docker Compose（推荐）
@@ -232,13 +249,15 @@ docker-compose down
 
 ### 环境变量 / Environment Variables
 
-| 变量名 | 说明 | 必需 | 优先级 |
+| 变量名 | 说明 | 必需 | 默认值 |
 |--------|------|------|--------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | 否* | 1（最高） |
-| `OPENAI_API_KEY` | OpenAI API 密钥 | 否* | 2 |
-| `OPENAI_MODEL` | OpenAI 模型名称 | 否 | 2（默认: gpt-4o-mini） |
-| `OLLAMA_BASE_URL` | Ollama 服务地址 | 否 | 3（默认: http://localhost:11434） |
-| `OLLAMA_MODEL` | Ollama 模型名称 | 否 | 3（默认: llama3.1:8b） |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | 否* | - |
+| `OPENAI_API_KEY` | OpenAI API 密钥 | 否* | - |
+| `OPENAI_MODEL` | OpenAI 模型名称 | 否 | gpt-4o-mini |
+| `OLLAMA_BASE_URL` | Ollama 服务地址 | 否 | http://localhost:11434 |
+| `OLLAMA_MODEL` | Ollama 模型名称 | 否 | llama3.1:8b |
+| `GRADIO_PORT` | 应用监听端口 | 否 | 7860 |
+| `GRADIO_FORCE_RESTART` | 自动停止占用端口的进程 | 否 | false |
 
 \* 至少需要配置一个 LLM 提供者的 API 密钥，或者确保 Ollama 在本地运行。
 
@@ -315,6 +334,20 @@ pytest --cov=src --cov-report=html
 更多测试信息请参考 [tests/README.md](tests/README.md)。
 
 ### 开发环境 / Development Environment
+
+**本地热重载开发 / Local Hot Reload**:
+
+应用支持 Gradio 热重载模式，修改代码后自动生效：
+
+```bash
+# 使用 gradio 命令启动（推荐）
+gradio src/main.py
+
+# 或使用 --force 参数避免端口冲突
+python src/main.py --force
+```
+
+**使用 Docker Compose 开发**:
 
 使用开发模式的 Docker Compose 配置，支持代码热重载：
 

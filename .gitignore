@@ -199,6 +199,9 @@ temp/
 # Docker
 .docker/
 
+# Docker volumes (Phase 2 - Milvus data)
+volumes/
+
 Changelog.md
 
 claude.md

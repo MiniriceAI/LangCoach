@@ -2,9 +2,22 @@ import gradio as gr
 import os
 import sys
 import socket
+from pathlib import Path
+from dotenv import load_dotenv
 from tabs.scenario_tab import create_scenario_tab
 from tabs.vocab_tab import create_vocab_tab
 from utils.logger import LOG
+
+# 加载 .env 文件（如果存在）
+# 在项目根目录查找 .env 文件
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    LOG.info(f"✅ 已加载配置文件: {env_path}")
+else:
+    # 尝试从当前工作目录加载
+    load_dotenv()
+    LOG.debug("🔍 尝试从当前目录加载 .env 文件")
 
 def is_port_in_use(port):
     """检查端口是否被占用"""
@@ -41,7 +54,7 @@ with gr.Blocks(title="LangCoach 英语私教") as demo:
 
 if __name__ == "__main__":
     # 从环境变量获取端口
-    port = int(os.getenv('GRADIO_PORT', '7860'))
+    port = int(os.getenv('GRADIO_PORT', '8300'))
     force_restart = '--force' in sys.argv or os.getenv('GRADIO_FORCE_RESTART', '').lower() == 'true'
 
     # 检查命令行参数（排除 --force）
@@ -50,8 +63,8 @@ if __name__ == "__main__":
         try:
             port = int(args[0])
         except ValueError:
-            print(f"⚠️ 无效的端口号: {args[0]}，使用默认端口 7860")
-            port = 7860
+            print(f"⚠️ 无效的端口号: {args[0]}，使用默认端口 8300")
+            port = 8300
 
     # 检查端口是否被占用
     if is_port_in_use(port):

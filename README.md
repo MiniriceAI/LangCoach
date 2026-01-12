@@ -184,33 +184,57 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-#### 4. 配置环境变量 / Configure Environment Variables
+#### 4. 配置 LLM 提供者 / Configure LLM Provider
 
-至少需要配置一个 LLM 提供者的 API 密钥：
+**Phase 2.5 更新**：支持 Ollama、DeepSeek、OpenAI 三种提供者，**默认使用 Ollama + GLM-4-9B**。
 
-**使用 DeepSeek（推荐）**:
+**方式 1: 使用 Ollama（推荐 - 免费本地运行）**:
 ```bash
-export DEEPSEEK_API_KEY=your_deepseek_api_key
-```
+# 1. 安装 Ollama
+# 访问 https://ollama.com 下载安装
 
-**使用 OpenAI**:
-```bash
-export OPENAI_API_KEY=your_openai_api_key
-export OPENAI_MODEL=gpt-4o-mini  # 可选，默认为 gpt-4o-mini
-```
-
-**使用 Ollama（本地部署）**:
-```bash
-# 首先确保 Ollama 正在运行
+# 2. 启动 Ollama 服务
 ollama serve
 
-# 拉取模型（首次使用）
-ollama pull llama3.1:8b
+# 3. 拉取 GLM-4-9B 模型（默认模型）
+ollama pull unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
 
-# 配置环境变量（可选）
+# 4. 验证模型
+ollama list
+
+# 5. 可选：配置环境变量（使用默认值可跳过）
 export OLLAMA_BASE_URL=http://localhost:11434
-export OLLAMA_MODEL=llama3.1:8b
+export OLLAMA_MODEL=unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
 ```
+
+**方式 2: 使用 DeepSeek（高性价比 API）**:
+```bash
+export DEEPSEEK_API_KEY=your_deepseek_api_key
+# 可选配置
+export DEEPSEEK_MODEL=deepseek-chat  # 默认值
+```
+
+**方式 3: 使用 OpenAI（高性能）**:
+```bash
+export OPENAI_API_KEY=your_openai_api_key
+# 可选配置
+export OPENAI_MODEL=gpt-4o-mini  # 默认值
+```
+
+**高级配置 - 自定义优先级**:
+```bash
+# 默认优先级: ollama > deepseek > openai
+# 可以自定义优先级顺序
+export LLM_PROVIDER_PRIORITY=deepseek,openai,ollama
+
+# 禁用某个提供者
+export OLLAMA_ENABLED=false
+```
+
+> **💡 提示**:
+> - Ollama 是默认提供者，无需 API key，完全免费
+> - 如果未配置任何提供者，系统会尝试连接本地 Ollama
+> - 详细配置请参考 `.env.example` 文件
 
 #### 5. 运行应用 / Run Application
 
@@ -273,12 +297,28 @@ docker-compose down
 
 | 变量名 | 说明 | 必需 | 默认值 |
 |--------|------|------|--------|
-| **LLM 配置** |
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | 否* | - |
-| `OPENAI_API_KEY` | OpenAI API 密钥 | 否* | - |
-| `OPENAI_MODEL` | OpenAI 模型名称 | 否 | gpt-4o-mini |
+| **LLM 配置 (Phase 2.5 增强)** |
+| `LLM_PROVIDER_PRIORITY` | 提供者优先级（逗号分隔） | 否 | ollama,deepseek,openai |
+| **Ollama 配置（默认提供者）** |
+| `OLLAMA_MODEL` | Ollama 模型名称 | 否 | unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL |
 | `OLLAMA_BASE_URL` | Ollama 服务地址 | 否 | http://localhost:11434 |
-| `OLLAMA_MODEL` | Ollama 模型名称 | 否 | llama3.1:8b |
+| `OLLAMA_TEMPERATURE` | 温度参数 | 否 | 0.8 |
+| `OLLAMA_MAX_TOKENS` | 最大 token 数 | 否 | 8192 |
+| `OLLAMA_ENABLED` | 是否启用 | 否 | true |
+| **DeepSeek 配置** |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | 否* | - |
+| `DEEPSEEK_MODEL` | 模型名称 | 否 | deepseek-chat |
+| `DEEPSEEK_BASE_URL` | API 地址 | 否 | https://api.deepseek.com |
+| `DEEPSEEK_TEMPERATURE` | 温度参数 | 否 | 0.8 |
+| `DEEPSEEK_MAX_TOKENS` | 最大 token 数 | 否 | 8192 |
+| `DEEPSEEK_ENABLED` | 是否启用 | 否 | true |
+| **OpenAI 配置** |
+| `OPENAI_API_KEY` | OpenAI API 密钥 | 否* | - |
+| `OPENAI_MODEL` | 模型名称 | 否 | gpt-4o-mini |
+| `OPENAI_BASE_URL` | API 地址（可选） | 否 | - |
+| `OPENAI_TEMPERATURE` | 温度参数 | 否 | 0.8 |
+| `OPENAI_MAX_TOKENS` | 最大 token 数 | 否 | 8192 |
+| `OPENAI_ENABLED` | 是否启用 | 否 | true |
 | **长期记忆配置 (Phase 2)** |
 | `MILVUS_HOST` | Milvus 主机地址 | 否** | - |
 | `MILVUS_PORT` | Milvus 端口 | 否 | 19530 |
@@ -286,7 +326,7 @@ docker-compose down
 | `GRADIO_PORT` | 应用监听端口 | 否 | 8300 (Phase 2 更新) |
 | `GRADIO_FORCE_RESTART` | 自动停止占用端口的进程 | 否 | false |
 
-\* 至少需要配置一个 LLM 提供者的 API 密钥，或者确保 Ollama 在本地运行。
+\* Ollama 是默认提供者，无需 API key。如果想使用 DeepSeek 或 OpenAI，需要配置对应的 API key。
 
 \** 如果不设置 `MILVUS_HOST`，长期记忆功能将被禁用，应用将以 Phase 1 模式运行。
 
@@ -294,10 +334,36 @@ docker-compose down
 
 ### LLM 提供者优先级 / LLM Provider Priority
 
-系统按以下优先级选择 LLM 提供者：
-1. **DeepSeek** - 如果配置了 `DEEPSEEK_API_KEY`，优先使用
-2. **OpenAI** - 如果配置了 `OPENAI_API_KEY`，使用 OpenAI
-3. **Ollama** - 如果以上都未配置，回退到本地 Ollama（需要 Ollama 服务运行）
+**Phase 2.5 更新**：系统现在支持可配置的提供者优先级。
+
+**默认优先级**（从高到低）:
+1. **Ollama** - 本地运行，免费，默认使用 GLM-4-9B 模型
+2. **DeepSeek** - 如果配置了 `DEEPSEEK_API_KEY`，使用 DeepSeek
+3. **OpenAI** - 如果配置了 `OPENAI_API_KEY`，使用 OpenAI
+
+**自定义优先级**:
+```bash
+# 示例：优先使用 DeepSeek，然后 OpenAI，最后 Ollama
+export LLM_PROVIDER_PRIORITY=deepseek,openai,ollama
+```
+
+**禁用某个提供者**:
+```bash
+# 禁用 Ollama，只使用 API 提供者
+export OLLAMA_ENABLED=false
+```
+
+**模型推荐**:
+- **Ollama 推荐模型**:
+  - `unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL` (默认，8B 参数，中英双语优秀)
+  - `llama3.1:8b-instruct-q8_0` (Llama 3.1 8B)
+  - `qwen2.5:14b` (Qwen 2.5 14B，更强大)
+
+- **DeepSeek 模型**: `deepseek-chat` (高性价比)
+
+- **OpenAI 模型**:
+  - `gpt-4o-mini` (便宜快速)
+  - `gpt-4o` (性能最佳)
 
 ## 📁 项目结构 / Project Structure
 

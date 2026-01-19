@@ -29,19 +29,19 @@ class LLMConfig:
         "ollama": {
             "model": "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q4_K_M",
             "base_url": "http://localhost:11434",
-            "temperature": 0.5,  # 降低温度以提高指令遵循能力
+            "temperature": 0.8,
             "max_tokens": 8192,
         },
         "deepseek": {
             "model": "deepseek-chat",
             "base_url": "https://api.deepseek.com",
-            "temperature": 0.5,
+            "temperature": 0.8,
             "max_tokens": 8192,
         },
         "openai": {
             "model": "gpt-4o-mini",
             "base_url": None,  # 使用默认
-            "temperature": 0.5,
+            "temperature": 0.8,
             "max_tokens": 8192,
         }
     }

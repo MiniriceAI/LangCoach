@@ -77,6 +77,7 @@ class LongTermMemory:
             self.dimension = 4096
 
         self.collection: Optional[Collection] = None
+        self._connected = False
         self._connect()
 
     def _connect(self):
@@ -86,16 +87,24 @@ class LongTermMemory:
             connections.connect(
                 alias="default",
                 host=self.host,
-                port=self.port
+                port=self.port,
+                timeout=5  # 5秒超时，避免长时间等待
             )
             LOG.info(f"[LongTermMemory] 成功连接到 Milvus: {self.host}:{self.port}")
 
             # 初始化 collection
             self._init_collection()
+            self._connected = True
 
         except Exception as e:
-            LOG.error(f"[LongTermMemory] 连接 Milvus 失败: {e}")
-            raise
+            LOG.warning(f"[LongTermMemory] Milvus 不可用，长期记忆功能已禁用: {e}")
+            self._connected = False
+            # 不再抛出异常，允许应用继续运行
+
+    @property
+    def is_connected(self) -> bool:
+        """检查是否已连接到 Milvus"""
+        return self._connected
 
     def _init_collection(self):
         """初始化或加载 Milvus collection"""
@@ -167,6 +176,9 @@ class LongTermMemory:
         Returns:
             bool: 是否存储成功
         """
+        if not self._connected:
+            return False
+
         try:
             LOG.debug(f"[LongTermMemory] 存储对话摘要: user={user_id}, session={session_id}, scenario={scenario}")
 
@@ -219,6 +231,9 @@ class LongTermMemory:
         Returns:
             List[Dict]: 相关记忆列表，每条记忆包含 summary、metadata、timestamp 等
         """
+        if not self._connected:
+            return []
+
         try:
             LOG.debug(f"[LongTermMemory] 检索记忆: user={user_id}, query={query[:50]}...")
 
@@ -314,6 +329,13 @@ class LongTermMemory:
         Returns:
             Dict: 统计信息
         """
+        if not self._connected:
+            return {
+                "total_sessions": 0,
+                "scenario_counts": {},
+                "latest_time": None,
+            }
+
         try:
             expr = f'user_id == "{user_id}"'
 
@@ -365,6 +387,9 @@ class LongTermMemory:
         Returns:
             bool: 是否删除成功
         """
+        if not self._connected:
+            return False
+
         try:
             expr = f'user_id == "{user_id}"'
             self.collection.delete(expr)
@@ -379,10 +404,14 @@ class LongTermMemory:
 
     def close(self):
         """关闭 Milvus 连接"""
+        if not self._connected:
+            return
+
         try:
             if self.collection:
                 self.collection.release()
             connections.disconnect("default")
+            self._connected = False
             LOG.info("[LongTermMemory] Milvus 连接已关闭")
         except Exception as e:
             LOG.error(f"[LongTermMemory] 关闭连接失败: {e}")

@@ -205,23 +205,47 @@ python test_env_loading.py
 ```
 
 **方式 1: 使用 Ollama（推荐 - 免费本地运行）**:
+
+> **⚠️ 重要提示**：Ollama 服务需要**手动启动**，LangCoach 不会自动启动 Ollama 服务。
+
 ```bash
 # 1. 安装 Ollama
 # 访问 https://ollama.com 下载安装
 
-# 2. 启动 Ollama 服务
+# 2. 启动 Ollama 服务（必需步骤）
+# 方式 A: 前台运行（会占用终端）
 ollama serve
 
-# 3. 拉取 GLM-4-9B 模型（默认模型）
-ollama pull unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
+# 方式 B: 后台运行（推荐）
+ollama serve &
+# 或者使用 nohup
+nohup ollama serve > /dev/null 2>&1 &
 
-# 4. 验证模型
+# 方式 C: 使用 systemd（Linux，开机自启）
+# 创建服务文件: /etc/systemd/system/ollama.service
+# 然后: systemctl enable ollama && systemctl start ollama
+
+# 3. 验证服务是否运行
+curl http://localhost:11434/api/tags
+# 或者
 ollama list
 
-# 5. 可选：配置环境变量（使用默认值可跳过）
+# 4. 拉取 GLM-4-9B 模型（默认模型）
+ollama pull unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
+
+# 5. 验证模型已安装
+ollama list
+
+# 6. 可选：配置环境变量（使用默认值可跳过）
 export OLLAMA_BASE_URL=http://localhost:11434
 export OLLAMA_MODEL=unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
 ```
+
+**常见问题排查**：
+- 如果启动 LangCoach 时提示无法连接 Ollama，请检查：
+  1. Ollama 服务是否正在运行：`curl http://localhost:11434/api/tags`
+  2. 模型是否已安装：`ollama list`
+  3. 如果使用 Docker，确保 Ollama 运行在宿主机或配置正确的 `OLLAMA_BASE_URL`
 
 **方式 2: 使用 DeepSeek（高性价比 API）**:
 ```bash

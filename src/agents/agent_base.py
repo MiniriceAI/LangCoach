@@ -61,9 +61,14 @@ class AgentBase(ABC):
             if MEMORY_AVAILABLE:
                 try:
                     self.memory = get_memory_instance()
-                    LOG.info(f"[{self.name}] 长期记忆已启用")
+                    # 检查是否真正连接成功
+                    if self.memory and self.memory.is_connected:
+                        LOG.info(f"[{self.name}] 长期记忆已启用")
+                    else:
+                        LOG.info(f"[{self.name}] Milvus 不可用，长期记忆已禁用")
+                        self.enable_long_term_memory = False
                 except Exception as e:
-                    LOG.error(f"[{self.name}] 初始化长期记忆失败: {e}")
+                    LOG.warning(f"[{self.name}] 初始化长期记忆失败: {e}")
                     self.enable_long_term_memory = False
             else:
                 LOG.warning(f"[{self.name}] 长期记忆模块不可用，已禁用")
@@ -214,6 +219,48 @@ class AgentBase(ABC):
 
         LOG.debug(f"[ChatBot][{self.name}] {response.content}")  # 记录调试日志
         return response.content  # 返回生成的回复内容
+
+    def chat_with_history_stream(self, user_input, session_id=None):
+        """
+        处理用户输入，流式生成包含聊天历史的回复。
+
+        参数:
+            user_input (str): 用户输入的消息
+            session_id (str, optional): 会话的唯一标识符
+
+        Yields:
+            str: 逐步生成的回复内容
+        """
+        if session_id is None:
+            session_id = self.session_id
+
+        # Phase 2: 检索相关的历史记忆
+        memory_context = self._retrieve_relevant_memories(user_input)
+
+        # 如果有记忆上下文，将其作为系统消息注入
+        messages = []
+        if memory_context:
+            messages.append(SystemMessage(content=memory_context))
+
+        messages.append(HumanMessage(content=user_input))
+
+        # 使用 stream 方法进行流式输出
+        full_response = ""
+        for chunk in self.chatbot_with_history.stream(
+            messages,
+            {"configurable": {"session_id": session_id}},
+        ):
+            # chunk 可能是 AIMessageChunk 或字符串
+            if hasattr(chunk, 'content'):
+                content = chunk.content
+            else:
+                content = str(chunk)
+
+            if content:
+                full_response += content
+                yield full_response
+
+        LOG.debug(f"[ChatBot][{self.name}] {full_response}")
 
     def save_conversation_summary(
         self,

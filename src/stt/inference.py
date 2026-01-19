@@ -138,8 +138,11 @@ class WhisperSTTInference:
             return_tensors="pt"
         ).input_features
 
-        # Move to device
+        # Move to device and convert dtype to match model
         input_features = input_features.to(self.model.device)
+        # 对于量化模型，需要将输入转换为 float16 以匹配模型权重
+        if self.config.load_in_4bit or self.config.load_in_8bit:
+            input_features = input_features.to(torch.float16)
 
         # Prepare generation kwargs
         generate_kwargs = {

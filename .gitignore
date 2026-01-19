@@ -208,3 +208,5 @@ claude.md
 .claude/
 
 .locks/
+
+unsloth_compiled_cache/

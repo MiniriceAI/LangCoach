@@ -49,10 +49,10 @@ class InferenceConfig:
     load_in_4bit: bool = False  # Use 4bit quantization for faster inference and less memory
     load_in_8bit: bool = False  # Use 8bit quantization (balance between speed and quality)
 
-    # Generation parameters
-    max_new_tokens: int = 1200
-    temperature: float = 0.6
-    top_p: float = 0.95
+    # Generation parameters - optimized for speed
+    max_new_tokens: int = 600  # Reduced from 1200 for faster generation (~10s audio max)
+    temperature: float = 0.4  # Lower temp for faster, more deterministic generation
+    top_p: float = 0.9
     repetition_penalty: float = 1.1
 
     # Output settings
@@ -159,8 +159,10 @@ class MultiSpeakerTTSInference:
 
         logger.info("Loading SNAC model...")
         self.snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz")
-        self.snac_model = self.snac_model.to("cpu")  # Keep on CPU to save GPU memory
-        logger.info("SNAC model loaded")
+        # Move SNAC to GPU for faster decoding
+        self.snac_model = self.snac_model.to(self.config.device)
+        self.snac_model.eval()
+        logger.info(f"SNAC model loaded on {self.config.device}")
 
     def _load_speaker_info(self):
         """Load supported speaker information from training config."""
@@ -226,20 +228,27 @@ class MultiSpeakerTTSInference:
         # Move to device
         input_ids = modified_input_ids.to(self.config.device)
         attention_mask = attention_mask.to(self.config.device)
+        
+        # Dynamic max_new_tokens based on text length
+        # Roughly 7 tokens per character for audio, with minimum of 200
+        text_length = len(text)
+        estimated_tokens = max(200, min(text_length * 7, max_new_tokens or self.config.max_new_tokens))
 
-        # Generate
-        generated_ids = self.model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens or self.config.max_new_tokens,
-            do_sample=True,
-            temperature=temperature or self.config.temperature,
-            top_p=top_p or self.config.top_p,
-            repetition_penalty=self.config.repetition_penalty,
-            num_return_sequences=1,
-            eos_token_id=128258,
-            use_cache=True,
-        )
+        # Generate with optimized settings
+        with torch.inference_mode():
+            generated_ids = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=estimated_tokens,
+                do_sample=True,
+                temperature=temperature or self.config.temperature,
+                top_p=top_p or self.config.top_p,
+                repetition_penalty=self.config.repetition_penalty,
+                num_return_sequences=1,
+                eos_token_id=128258,
+                use_cache=True,
+                pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+            )
 
         # Process generated tokens
         audio = self._decode_audio(generated_ids)
@@ -304,12 +313,13 @@ class MultiSpeakerTTSInference:
             layer_3.append(code_list[7 * i + 6] - (6 * 4096))
 
         codes = [
-            torch.tensor(layer_1).unsqueeze(0),
-            torch.tensor(layer_2).unsqueeze(0),
-            torch.tensor(layer_3).unsqueeze(0),
+            torch.tensor(layer_1, device=self.config.device).unsqueeze(0),
+            torch.tensor(layer_2, device=self.config.device).unsqueeze(0),
+            torch.tensor(layer_3, device=self.config.device).unsqueeze(0),
         ]
 
-        audio_hat = self.snac_model.decode(codes)
+        with torch.no_grad():
+            audio_hat = self.snac_model.decode(codes)
         return audio_hat
 
     def synthesize_batch(

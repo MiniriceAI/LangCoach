@@ -3,7 +3,7 @@ LLM 工厂模块，用于创建和管理不同的 LLM 提供者实例。
 支持 Ollama、DeepSeek 和 OpenAI 三种 LLM 提供者。
 
 Phase 2 更新：支持从配置文件读取，支持可配置的提供者优先级。
-默认提供者：Ollama (unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL)
+默认优先级：Ollama > DeepSeek > OpenAI（可通过 .env 修改）
 """
 
 from langchain_openai import ChatOpenAI  # 导入 ChatOpenAI 模型
@@ -110,12 +110,12 @@ def create_llm(provider_name: str = None) -> BaseChatModel:
     """
     创建 LLM 实例，支持多种 LLM 提供者。
 
-    优先级（可通过 LLM_PROVIDER_PRIORITY 环境变量配置）:
+    优先级（可通过 .env 文件中的 LLM_PROVIDER_PRIORITY 环境变量配置）:
     - 默认: Ollama > DeepSeek > OpenAI
     - 可配置为: deepseek,openai,ollama 或其他顺序
 
     环境变量说明:
-        # 提供者优先级
+        # 提供者优先级（在 .env 文件中配置）
         LLM_PROVIDER_PRIORITY: 逗号分隔的提供者列表（如：ollama,deepseek,openai）
 
         # Ollama 配置（默认提供者）
@@ -188,7 +188,7 @@ def create_llm(provider_name: str = None) -> BaseChatModel:
                 "3. OpenAI: 设置 OPENAI_API_KEY 环境变量\n"
                 "\n"
                 "提示: Ollama 是默认提供者，无需 API key。\n"
-                "运行 'ollama serve' 启动服务，然后 'ollama pull unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL' 下载模型。"
+                "运行 'ollama serve' 启动服务，然后 'ollama pull <model>' 下载模型。"
             )
         LOG.info(
             f"[LLM Factory] 自动选择提供者: {config.name} "

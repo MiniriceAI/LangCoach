@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage  # 导入消息�
 from langchain_core.runnables.history import RunnableWithMessageHistory  # 导入带有消息历史的可运行类
 
 from .session_history import get_session_history  # 导入会话历史相关方法
-from .llm_factory import create_llm  # 导入 LLM 工厂函数
+from .llm_factory import create_llm, get_current_provider_info  # 导入 LLM 工厂函数
 from .conversation_config import ConversationConfig, get_default_config
 from utils.logger import LOG  # 导入日志工具
 
@@ -176,6 +176,13 @@ class AgentBase(ABC):
         # 根据环境变量选择合适的 LLM 提供者
         llm = create_llm()
 
+        # 保存当前 LLM 提供者信息
+        self._llm_provider_info = get_current_provider_info()
+        LOG.info(
+            f"[{self.name}] LLM 初始化: provider={self._llm_provider_info.get('provider')}, "
+            f"model={self._llm_provider_info.get('model')}"
+        )
+
         # 组合提示模板和 LLM
         self.chatbot = system_prompt | llm
 
@@ -196,6 +203,13 @@ class AgentBase(ABC):
         """
         if session_id is None:
             session_id = self.session_id
+
+        # 记录每次聊天使用的 LLM 信息
+        provider_info = getattr(self, '_llm_provider_info', {})
+        LOG.info(
+            f"[Chat][{self.name}] 使用 LLM: provider={provider_info.get('provider')}, "
+            f"model={provider_info.get('model')}, session={session_id}"
+        )
 
         # Phase 2: 检索相关的历史记忆
         memory_context = self._retrieve_relevant_memories(user_input)

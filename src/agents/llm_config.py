@@ -1,6 +1,8 @@
 """
 LLM 配置模块
-管理所有 LLM 提供者的配置，包括默认值、优先级等
+管理所有 LLM 提供者的配置
+
+所有配置都从 .env 文件读取，不使用硬编码默认值。
 """
 import os
 from typing import Dict, Any, List, Optional
@@ -22,31 +24,39 @@ class LLMProviderConfig:
 
 
 class LLMConfig:
-    """LLM 配置管理器"""
+    """
+    LLM 配置管理器
 
-    # 默认配置
-    DEFAULT_PROVIDERS = {
-        "ollama": {
-            "model": "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q4_K_M",
-            "base_url": "http://localhost:11434",
-            "temperature": 0.8,
-            "max_tokens": 8192,
-        },
-        "deepseek": {
-            "model": "deepseek-chat",
-            "base_url": "https://api.deepseek.com",
-            "temperature": 0.8,
-            "max_tokens": 8192,
-        },
-        "openai": {
-            "model": "gpt-4o-mini",
-            "base_url": None,  # 使用默认
-            "temperature": 0.8,
-            "max_tokens": 8192,
-        }
-    }
+    所有配置从 .env 文件读取，支持的环境变量：
 
-    # 默认优先级（数字越小优先级越高）
+    # 优先级配置
+    LLM_PROVIDER_PRIORITY=ollama,deepseek,openai
+
+    # Ollama 配置
+    OLLAMA_MODEL=<model_name>
+    OLLAMA_BASE_URL=http://localhost:11434
+    OLLAMA_TEMPERATURE=0.8
+    OLLAMA_MAX_TOKENS=8192
+    OLLAMA_ENABLED=true
+
+    # DeepSeek 配置
+    DEEPSEEK_API_KEY=<api_key>
+    DEEPSEEK_MODEL=deepseek-chat
+    DEEPSEEK_BASE_URL=https://api.deepseek.com
+    DEEPSEEK_TEMPERATURE=0.8
+    DEEPSEEK_MAX_TOKENS=8192
+    DEEPSEEK_ENABLED=true
+
+    # OpenAI 配置
+    OPENAI_API_KEY=<api_key>
+    OPENAI_MODEL=gpt-4o-mini
+    OPENAI_BASE_URL=<optional>
+    OPENAI_TEMPERATURE=0.8
+    OPENAI_MAX_TOKENS=8192
+    OPENAI_ENABLED=true
+    """
+
+    # 默认优先级
     DEFAULT_PRIORITY = ["ollama", "deepseek", "openai"]
 
     def __init__(self):
@@ -60,25 +70,30 @@ class LLMConfig:
         # 1. 加载优先级配置
         priority_str = os.getenv("LLM_PROVIDER_PRIORITY", "")
         if priority_str:
-            # 从环境变量读取优先级，例如：LLM_PROVIDER_PRIORITY=ollama,deepseek,openai
             self.priority = [p.strip() for p in priority_str.split(",") if p.strip()]
-            LOG.info(f"[LLM Config] 使用自定义优先级: {self.priority}")
+            LOG.info(f"[LLM Config] 优先级: {self.priority}")
         else:
             self.priority = self.DEFAULT_PRIORITY.copy()
-            LOG.debug(f"[LLM Config] 使用默认优先级: {self.priority}")
+            LOG.info(f"[LLM Config] 使用默认优先级: {self.priority}")
 
         # 2. 加载每个提供者的配置
         for provider_name in self.priority:
             config = self._load_provider_config(provider_name)
             if config:
                 self.providers[provider_name] = config
+                LOG.info(f"[LLM Config] 提供者 {provider_name} 已加载")
+            else:
+                LOG.info(f"[LLM Config] 提供者 {provider_name} 不可用")
+
+        # 3. 显示最终选择
+        available = self.list_available_providers()
+        LOG.info(f"[LLM Config] 可用提供者: {available}")
+        if available:
+            LOG.info(f"[LLM Config] 默认提供者: {available[0]}")
 
     def _load_provider_config(self, provider_name: str) -> Optional[LLMProviderConfig]:
         """加载单个提供者的配置"""
         provider_upper = provider_name.upper()
-
-        # 获取默认配置
-        default_config = self.DEFAULT_PROVIDERS.get(provider_name, {})
 
         # 检查是否启用该提供者
         enabled_env = os.getenv(f"{provider_upper}_ENABLED", "true").lower()
@@ -90,24 +105,31 @@ class LLMConfig:
 
         # 构建配置
         if provider_name == "ollama":
-            return self._load_ollama_config(default_config)
+            return self._load_ollama_config()
         elif provider_name == "deepseek":
-            return self._load_deepseek_config(default_config)
+            return self._load_deepseek_config()
         elif provider_name == "openai":
-            return self._load_openai_config(default_config)
+            return self._load_openai_config()
         else:
             LOG.warning(f"[LLM Config] 未知的提供者: {provider_name}")
             return None
 
-    def _load_ollama_config(self, default: Dict[str, Any]) -> Optional[LLMProviderConfig]:
-        """加载 Ollama 配置"""
-        # Ollama 不需要 API key，始终尝试使用
-        base_url = os.getenv("OLLAMA_BASE_URL", default.get("base_url"))
-        model = os.getenv("OLLAMA_MODEL", default.get("model"))
-        temperature = float(os.getenv("OLLAMA_TEMPERATURE", default.get("temperature", 0.8)))
-        max_tokens = int(os.getenv("OLLAMA_MAX_TOKENS", default.get("max_tokens", 8192)))
+    def _load_ollama_config(self) -> Optional[LLMProviderConfig]:
+        """加载 Ollama 配置（从 .env）"""
+        model = os.getenv("OLLAMA_MODEL")
+        base_url = os.getenv("OLLAMA_BASE_URL")
 
-        LOG.info(f"[LLM Config] Ollama 配置: model={model}, base_url={base_url}")
+        LOG.debug(f"[LLM Config] Ollama 环境变量: OLLAMA_MODEL={model}, OLLAMA_BASE_URL={base_url}")
+
+        # Ollama 必须配置 model 和 base_url
+        if not model or not base_url:
+            LOG.info("[LLM Config] Ollama 未配置 (需要 OLLAMA_MODEL 和 OLLAMA_BASE_URL)")
+            return None
+
+        temperature = float(os.getenv("OLLAMA_TEMPERATURE", "0.8"))
+        max_tokens = int(os.getenv("OLLAMA_MAX_TOKENS", "8192"))
+
+        LOG.info(f"[LLM Config] Ollama: model={model}, base_url={base_url}")
 
         return LLMProviderConfig(
             name="ollama",
@@ -117,24 +139,27 @@ class LLMConfig:
             temperature=temperature,
             max_tokens=max_tokens,
             extra_params={
-                "num_predict": max_tokens,  # Ollama 使用 num_predict 而不是 max_tokens
+                "num_predict": max_tokens,
             }
         )
 
-    def _load_deepseek_config(self, default: Dict[str, Any]) -> Optional[LLMProviderConfig]:
-        """加载 DeepSeek 配置"""
+    def _load_deepseek_config(self) -> Optional[LLMProviderConfig]:
+        """加载 DeepSeek 配置（从 .env）"""
         api_key = os.getenv("DEEPSEEK_API_KEY")
 
-        if not api_key:
-            LOG.debug("[LLM Config] DeepSeek API key 未配置")
+        LOG.debug(f"[LLM Config] DeepSeek 环境变量: DEEPSEEK_API_KEY={'***' if api_key else 'None'}")
+
+        # 检查 API key 是否有效（非空且非占位符）
+        if not api_key or api_key.startswith("your_") or api_key == "sk-xxx":
+            LOG.info("[LLM Config] DeepSeek API key 未配置或为占位符")
             return None
 
-        base_url = os.getenv("DEEPSEEK_BASE_URL", default.get("base_url"))
-        model = os.getenv("DEEPSEEK_MODEL", default.get("model"))
-        temperature = float(os.getenv("DEEPSEEK_TEMPERATURE", default.get("temperature", 0.8)))
-        max_tokens = int(os.getenv("DEEPSEEK_MAX_TOKENS", default.get("max_tokens", 8192)))
+        model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        temperature = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.8"))
+        max_tokens = int(os.getenv("DEEPSEEK_MAX_TOKENS", "8192"))
 
-        LOG.info(f"[LLM Config] DeepSeek 配置: model={model}, base_url={base_url}")
+        LOG.info(f"[LLM Config] DeepSeek: model={model}, base_url={base_url}")
 
         return LLMProviderConfig(
             name="deepseek",
@@ -146,20 +171,21 @@ class LLMConfig:
             max_tokens=max_tokens,
         )
 
-    def _load_openai_config(self, default: Dict[str, Any]) -> Optional[LLMProviderConfig]:
-        """加载 OpenAI 配置"""
+    def _load_openai_config(self) -> Optional[LLMProviderConfig]:
+        """加载 OpenAI 配置（从 .env）"""
         api_key = os.getenv("OPENAI_API_KEY")
 
-        if not api_key:
-            LOG.debug("[LLM Config] OpenAI API key 未配置")
+        # 检查 API key 是否有效（非空且非占位符）
+        if not api_key or api_key.startswith("your_") or api_key.startswith("sk-xxx"):
+            LOG.debug("[LLM Config] OpenAI API key 未配置或为占位符")
             return None
 
-        base_url = os.getenv("OPENAI_BASE_URL", default.get("base_url"))
-        model = os.getenv("OPENAI_MODEL", default.get("model"))
-        temperature = float(os.getenv("OPENAI_TEMPERATURE", default.get("temperature", 0.8)))
-        max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", default.get("max_tokens", 8192)))
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        base_url = os.getenv("OPENAI_BASE_URL")  # 可选
+        temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.8"))
+        max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "8192"))
 
-        LOG.info(f"[LLM Config] OpenAI 配置: model={model}")
+        LOG.info(f"[LLM Config] OpenAI: model={model}")
 
         return LLMProviderConfig(
             name="openai",

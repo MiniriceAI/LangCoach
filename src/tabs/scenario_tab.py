@@ -183,9 +183,9 @@ def create_scenario_tab():
             outputs=[scenario_intro, scenario_chatbot],
         )
 
-        # 处理用户消息的函数（流式输出）
+        # 处理用户消息的函数
         def on_message_submit(user_input, chat_history, scenario):
-            """处理用户提交的消息，先添加用户消息"""
+            """处理用户提交的消息"""
             if not user_input or not user_input.strip():
                 return chat_history or [], ""
 
@@ -195,60 +195,31 @@ def create_scenario_tab():
             if chat_history is None:
                 chat_history = []
 
-            # 创建新的聊天历史列表
+            # 创建新的聊天历史列表（避免直接修改原列表）
             new_chat_history = list(chat_history) if chat_history else []
 
             # 添加用户消息到聊天历史
             new_chat_history.append({"role": "user", "content": user_input.strip()})
 
+            # 获取AI回复
+            bot_message = agents[scenario].chat_with_history(user_input.strip())
+
+            # 添加AI回复到聊天历史
+            new_chat_history.append({"role": "assistant", "content": bot_message})
+
+            LOG.debug(f"[Scenario] Chat history updated, length: {len(new_chat_history)}")
             return new_chat_history, ""  # 返回更新后的聊天历史和清空的输入框
 
-        def stream_bot_response(chat_history, scenario):
-            """流式生成AI回复"""
-            if not chat_history or len(chat_history) == 0:
-                yield chat_history
-                return
-
-            # 获取最后一条用户消息
-            last_message = chat_history[-1]
-            if last_message.get("role") != "user":
-                yield chat_history
-                return
-
-            user_input = last_message.get("content", "")
-            if not user_input:
-                yield chat_history
-                return
-
-            # 添加一个空的 assistant 消息占位
-            chat_history = list(chat_history)
-            chat_history.append({"role": "assistant", "content": ""})
-
-            # 流式获取AI回复
-            for partial_response in agents[scenario].chat_with_history_stream(user_input):
-                chat_history[-1]["content"] = partial_response
-                yield chat_history
-
-            LOG.debug(f"[Scenario] Chat history updated, length: {len(chat_history)}")
-
-        # 绑定提交事件 - 使用两步：先添加用户消息，再流式生成回复
+        # 绑定提交事件
         scenario_submit_btn.click(
-            fn=on_message_submit,
+            fn=lambda msg, hist, scen: on_message_submit(msg, hist, scen),
             inputs=[scenario_input, scenario_chatbot, scenario_radio],
             outputs=[scenario_chatbot, scenario_input],
-        ).then(
-            fn=stream_bot_response,
-            inputs=[scenario_chatbot, scenario_radio],
-            outputs=[scenario_chatbot],
         )
 
         # 也支持回车键提交
         scenario_input.submit(
-            fn=on_message_submit,
+            fn=lambda msg, hist, scen: on_message_submit(msg, hist, scen),
             inputs=[scenario_input, scenario_chatbot, scenario_radio],
             outputs=[scenario_chatbot, scenario_input],
-        ).then(
-            fn=stream_bot_response,
-            inputs=[scenario_chatbot, scenario_radio],
-            outputs=[scenario_chatbot],
         )

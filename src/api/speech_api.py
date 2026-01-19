@@ -63,6 +63,7 @@ class SynthesizeRequest(BaseModel):
     speaker: str = "Ceylia"
     temperature: Optional[float] = None
     top_p: Optional[float] = None
+    fast_mode: bool = False  # Use Edge-TTS for faster response
 
 
 class TranscribeResponse(BaseModel):
@@ -155,6 +156,10 @@ async def synthesize(request: SynthesizeRequest):
         WAV audio file as streaming response
     """
     try:
+        # Fast mode uses Edge-TTS (Microsoft Azure) for near-instant response
+        if request.fast_mode:
+            return await synthesize_fast(request.text, request.speaker)
+        
         service = get_tts_service()
 
         result = service.synthesize(
@@ -184,6 +189,46 @@ async def synthesize(request: SynthesizeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Edge-TTS voice mapping for fast mode
+EDGE_TTS_VOICES = {
+    "Ceylia": "en-US-JennyNeural",  # Female, natural
+    "Tifa": "en-US-AriaNeural",     # Female, expressive
+    "default": "en-US-JennyNeural"
+}
+
+
+async def synthesize_fast(text: str, speaker: str) -> StreamingResponse:
+    """Fast TTS using Edge-TTS (Microsoft Azure)."""
+    try:
+        import edge_tts
+        
+        voice = EDGE_TTS_VOICES.get(speaker, EDGE_TTS_VOICES["default"])
+        logger.info(f"[Fast TTS] Using Edge-TTS voice: {voice} for speaker: {speaker}")
+        
+        communicate = edge_tts.Communicate(text, voice)
+        buffer = io.BytesIO()
+        
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buffer.write(chunk["data"])
+        
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="audio/mpeg",  # Edge-TTS outputs MP3
+            headers={
+                "Content-Disposition": f'attachment; filename="speech_{speaker}.mp3"'
+            }
+        )
+    except ImportError:
+        logger.error("edge-tts not installed. Install with: pip install edge-tts")
+        raise HTTPException(status_code=500, detail="edge-tts not installed")
+    except Exception as e:
+        logger.error(f"Edge-TTS error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/synthesize/json")
 async def synthesize_json(request: SynthesizeRequest):
     """
@@ -198,6 +243,10 @@ async def synthesize_json(request: SynthesizeRequest):
     import base64
 
     try:
+        # Fast mode uses Edge-TTS
+        if request.fast_mode:
+            return await synthesize_fast_json(request.text, request.speaker)
+        
         service = get_tts_service()
 
         result = service.synthesize(
@@ -224,6 +273,40 @@ async def synthesize_json(request: SynthesizeRequest):
 
     except Exception as e:
         logger.error(f"Synthesis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def synthesize_fast_json(text: str, speaker: str) -> JSONResponse:
+    """Fast TTS using Edge-TTS, returning JSON with base64 audio."""
+    import base64
+    
+    try:
+        import edge_tts
+        
+        voice = EDGE_TTS_VOICES.get(speaker, EDGE_TTS_VOICES["default"])
+        logger.info(f"[Fast TTS JSON] Using Edge-TTS voice: {voice} for speaker: {speaker}")
+        
+        communicate = edge_tts.Communicate(text, voice)
+        buffer = io.BytesIO()
+        
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buffer.write(chunk["data"])
+        
+        audio_bytes = buffer.getvalue()
+        
+        return JSONResponse({
+            "audio_base64": base64.b64encode(audio_bytes).decode("utf-8"),
+            "sample_rate": 24000,  # Edge-TTS uses 24kHz
+            "speaker": speaker,
+            "text": text,
+            "format": "mp3"
+        })
+    except ImportError:
+        logger.error("edge-tts not installed")
+        raise HTTPException(status_code=500, detail="edge-tts not installed")
+    except Exception as e:
+        logger.error(f"Edge-TTS error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -42,10 +42,10 @@ class TTSServiceConfig:
     load_in_4bit: bool = True
     load_in_8bit: bool = False
 
-    # Generation parameters
-    max_new_tokens: int = 1200
-    temperature: float = 0.6
-    top_p: float = 0.95
+    # Generation parameters - optimized for speed
+    max_new_tokens: int = 600  # Reduced for faster generation
+    temperature: float = 0.4  # Lower for faster, more deterministic
+    top_p: float = 0.9
     repetition_penalty: float = 1.1
 
     # Output settings

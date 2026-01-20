@@ -210,3 +210,5 @@ claude.md
 .locks/
 
 unsloth_compiled_cache/
+
+evaluation/reports/

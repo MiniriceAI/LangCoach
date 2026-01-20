@@ -53,14 +53,14 @@ LangCoach 2.0 aims to evolve from a simple text-based scenario practice tool int
 *   **Architecture:** Frontend (Mini Program) + Backend API (FastAPI wrapper around Gradio/LangChain).
 *   **Key Features:** Audio-first interface, daily check-ins, social sharing of conversation scores.
 
-### 2.7. Observability & User Feedback Loop
+### 2.7. Quality Assurance & Observability
+*   **Evaluation Framework:**
+    *   We follow a strict **"Performance + Quality"** dual-track evaluation strategy.
+    *   Detailed metrics, pass/fail criteria (LLM-as-a-Judge), and CI/CD test cases are defined in the standalone document: **[EVALUATION_PLAN.md](./EVALUATION_PLAN.md)**.
+    *   *Key Focus:* E2E Latency, strict prompt format compliance, and pedagogical logic verification.
 *   **User Feedback (RLHF Data Collection):**
-    *   *Granularity:* Per-turn thumbs up/down and Post-session 5-star rating with optional comments.
-    *   *Usage:* "Polly" mechanism to accept user signals. Low-rated interactions are flagged for offline review and fine-tuning dataset augmentation.
-*   **Performance Metrics (KPIs):**
-    *   *E2E Latency:* Tracking the full pipeline (Audio Input -> STT -> LLM Inference -> TTS -> Audio Output). Target: < 1.5s for text, < 3s for full audio loop.
-    *   *Speech Accuracy:* User corrections or repeats can signal STT failure (proxy for Word Error Rate).
-    *   *Engagement:* Session Completion Rate (e.g., % of users finishing the selected 20 turns) and Daily Active Users (DAU).
+    *   *Granularity:* Per-turn thumbs up/down and Post-session 5-star rating.
+    *   *Usage:* "Polly" mechanism to accept user signals for offline review and dataset augmentation.
 
 ---
 
@@ -120,6 +120,15 @@ To compete with apps like Duolingo, HelloTalk, or Talkpal AI, the following feat
         *   *Auth:* Integrate WeChat Login.
         *   *Audio:* Handle WeChat recorder manager format conversion to server format (silk/mp3 -> wav).
     *   **Milestone:** v2.1.0 - Mobile Launch.
+
+### Phase 5: Quality Assurance (Weeks 17-18)
+*   **Goal:** Validate product quality against the defined evaluation framework.
+*   **Tasks:**
+    *   **Evaluation Implementation:**
+        *   Execute the protocols defined in **[EVALUATION_PLAN.md](./EVALUATION_PLAN.md)**, covering E2E Latency targets, LLM-as-a-Judge scoring rules, and automated test cases.
+    *   **Compliance Verification:**
+        *   Ensure strict adherence to system prompts (e.g., format compliance, bilingual logic) and persona consistency across all scenarios.
+*   **Milestone:** v2.2.0 - Quality Guard.
 
 ---
 

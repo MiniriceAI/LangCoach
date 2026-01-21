@@ -100,7 +100,7 @@ class E2EEvaluator(BaseEvaluator):
         self.tts_fast_mode = tts_fast_mode
         self.speaker = speaker
         self.system_prompt = system_prompt or DEFAULT_E2E_PROMPT
-        self.api_url = api_url or os.getenv("SPEECH_API_URL", "http://localhost:8301")
+        self.api_url = api_url or os.getenv("SPEECH_API_URL", "http://localhost:8600")
 
         self._llm = None
         self._provider_info: Dict[str, str] = {}

@@ -40,7 +40,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=your_model
 
 # Speech API
-SPEECH_API_URL=http://localhost:8301
+SPEECH_API_URL=http://localhost:8600
 ```
 
 ### 3. 启动 Speech API（如需测试 STT/TTS）

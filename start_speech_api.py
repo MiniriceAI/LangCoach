@@ -32,7 +32,7 @@ def kill_port(port):
         return False
 
 def main():
-    port = int(os.getenv('SPEECH_API_PORT', '8301'))
+    port = int(os.getenv('SPEECH_API_PORT', '8600'))
     host = os.getenv('SPEECH_API_HOST', '0.0.0.0')
     
     print(f"Starting Speech API on {host}:{port}")

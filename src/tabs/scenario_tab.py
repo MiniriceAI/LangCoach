@@ -17,7 +17,7 @@ from agents.conversation_config import (
 from utils.logger import LOG
 
 # Speech API 配置（通过 HTTP 调用独立的 Speech API 服务）
-SPEECH_API_URL = os.getenv("SPEECH_API_URL", "http://localhost:8301")
+SPEECH_API_URL = os.getenv("SPEECH_API_URL", "http://localhost:8600")
 
 # 支持的 Speaker 列表
 SPEAKER_CHOICES = [

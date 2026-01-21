@@ -2,6 +2,11 @@
 # Start the LangCoach Mini Program API
 # 统一的 API 服务，端口 8600
 #
+# 服务架构:
+# - LLM: Ollama + GLM-4-9B (hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL)
+# - TTS: Edge-TTS (Microsoft Azure) - 快速模式，无需预加载
+# - STT: unsloth/whisper-large-v3 + 4bit quantization
+#
 # 提供以下功能:
 # - 对话管理 (/api/chat/*)
 # - 语音识别 (/api/transcribe)
@@ -22,7 +27,9 @@ source /workspace/miniconda3/bin/activate base
 # Default settings
 HOST=${API_HOST:-0.0.0.0}
 PORT=${API_PORT:-8600}
-PRELOAD=${PRELOAD_MODELS:-false}
+
+# 默认预加载模型，避免首次请求超时
+PRELOAD=${PRELOAD_MODELS:-true}
 
 # Clean up port
 echo "Cleaning up port $PORT..."
@@ -42,6 +49,11 @@ echo "  Host: $HOST"
 echo "  Port: $PORT"
 echo "  Preload models: $PRELOAD"
 echo "  Python: $(which python)"
+echo ""
+echo "  Services:"
+echo "    LLM: Ollama + GLM-4-9B"
+echo "    TTS: Edge-TTS (fast mode)"
+echo "    STT: Whisper-large-v3 (4bit)"
 echo ""
 echo "  Endpoints:"
 echo "    Health:     GET  /health"

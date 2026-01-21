@@ -4,7 +4,15 @@
 
 本文档描述 LangCoach 小程序后端 API 的架构设计和使用方法。API 服务整合了对话管理、语音识别、语音合成、词典查询等功能，通过单一端口（8600）对外提供服务。
 
-## 架构设计
+## 服务架构
+
+### 技术栈
+
+| 服务 | 技术方案 | 说明 |
+|------|----------|------|
+| **LLM** | Ollama + GLM-4-9B | `hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL` |
+| **TTS** | Edge-TTS (Microsoft Azure) | 快速模式，无需本地模型 |
+| **STT** | Whisper-large-v3 + 4bit | `unsloth/whisper-large-v3` |
 
 ### 系统架构图
 
@@ -29,10 +37,11 @@
 │  │  └─────┬──────┘ └─────┬──────┘ └────────────┘            │  │
 │  │        │              │                                   │  │
 │  │        ▼              ▼                                   │  │
-│  │  ┌────────────┐ ┌────────────┐                           │  │
-│  │  │  Session   │ │  TTS/STT   │                           │  │
-│  │  │  Manager   │ │  Services  │                           │  │
-│  │  └─────┬──────┘ └────────────┘                           │  │
+│  │  ┌────────────┐ ┌────────────────────────────┐           │  │
+│  │  │  Session   │ │      Speech Services       │           │  │
+│  │  │  Manager   │ │  STT: Whisper-large-v3     │           │  │
+│  │  │            │ │  TTS: Edge-TTS (Azure)     │           │  │
+│  │  └─────┬──────┘ └────────────────────────────┘           │  │
 │  └────────┼──────────────────────────────────────────────────┘  │
 │           │                                                      │
 │           ▼                                                      │
@@ -48,11 +57,8 @@
 │             │                                                    │
 │             ▼                                                    │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    LLM Factory                            │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐               │  │
-│  │  │  Ollama  │  │ DeepSeek │  │  OpenAI  │               │  │
-│  │  │ (GLM-4)  │  │          │  │          │               │  │
-│  │  └──────────┘  └──────────┘  └──────────┘               │  │
+│  │           Ollama + GLM-4-9B-0414-GGUF:Q8_K_XL            │  │
+│  │              (Local LLM Inference)                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -63,20 +69,39 @@
 |------|------|------|
 | 统一 API | `src/api/miniprogram_api.py` | 整合所有小程序接口 |
 | 场景代理 | `src/agents/scenario_agent.py` | 处理场景对话逻辑 |
-| TTS 服务 | `src/tts/service.py` | 文字转语音 |
-| STT 服务 | `src/stt/service.py` | 语音转文字 |
-| LLM 工厂 | `src/agents/llm_factory.py` | 管理多 LLM 提供者 |
+| TTS 服务 | Edge-TTS | 文字转语音 (Microsoft Azure) |
+| STT 服务 | `src/stt/service.py` | 语音转文字 (Whisper) |
+| LLM 工厂 | `src/agents/llm_factory.py` | 管理 LLM 提供者 |
 
 ---
 
 ## 快速开始
+
+### 前置条件
+
+1. **Ollama 服务运行中**
+   ```bash
+   # 启动 Ollama
+   ollama serve
+
+   # 拉取 GLM-4-9B 模型
+   ollama pull hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL
+
+   # 验证
+   ollama list
+   ```
+
+2. **Python 环境**
+   ```bash
+   source /workspace/miniconda3/bin/activate base
+   ```
 
 ### 启动服务
 
 ```bash
 cd /workspace/LangCoach
 
-# 方式 1: 使用启动脚本（推荐）
+# 方式 1: 使用启动脚本（推荐，默认预加载所有服务）
 ./run_miniprogram_api.sh
 
 # 方式 2: 直接使用 uvicorn

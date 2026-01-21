@@ -223,17 +223,40 @@ async def lifespan(app: FastAPI):
 
     preload = os.getenv("PRELOAD_MODELS", "false").lower() == "true"
     if preload:
-        logger.info("Pre-loading models...")
-        try:
-            get_tts_service()
-            logger.info("TTS service loaded")
-        except Exception as e:
-            logger.error(f"Failed to load TTS: {e}")
+        logger.info("Pre-loading services...")
+
+        # 1. 预加载 STT 服务 (Whisper-large-v3 + 4bit)
+        logger.info("[1/3] Loading STT service (Whisper-large-v3)...")
         try:
             get_stt_service()
-            logger.info("STT service loaded")
+            logger.info("[1/3] STT service loaded successfully")
         except Exception as e:
-            logger.error(f"Failed to load STT: {e}")
+            logger.error(f"[1/3] Failed to load STT: {e}")
+
+        # 2. TTS 使用 Edge-TTS 快速模式，无需预加载本地模型
+        # 如果需要使用本地 Orpheus TTS，取消下面的注释
+        # logger.info("[2/3] Loading TTS service (Orpheus)...")
+        # try:
+        #     get_tts_service()
+        #     logger.info("[2/3] TTS service loaded successfully")
+        # except Exception as e:
+        #     logger.error(f"[2/3] Failed to load TTS: {e}")
+        logger.info("[2/3] TTS: Using Edge-TTS (no preload needed)")
+
+        # 3. 预加载 LLM Agent (Ollama + GLM-4-9B)
+        logger.info("[3/3] Loading LLM Agents (Ollama + GLM-4-9B)...")
+        try:
+            # 预加载第一个场景的 Agent，这会初始化 LLM 连接
+            get_agent(AVAILABLE_SCENARIOS[0])
+            logger.info("[3/3] LLM Agent loaded successfully")
+        except Exception as e:
+            logger.error(f"[3/3] Failed to load LLM Agent: {e}")
+
+        logger.info("=" * 50)
+        logger.info("All services loaded. API is ready!")
+        logger.info("=" * 50)
+    else:
+        logger.info("Preload disabled. Services will load on first request.")
 
     yield
     logger.info("Shutting down API...")
@@ -261,14 +284,28 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """健康检查"""
-    global _tts_service, _stt_service
+    global _tts_service, _stt_service, _agents
     return {
         "status": "healthy",
         "service": "langcoach-miniprogram-api",
         "timestamp": datetime.now().isoformat(),
         "sessions_count": len(_sessions),
-        "tts_initialized": _tts_service is not None,
-        "stt_initialized": _stt_service is not None,
+        "services": {
+            "stt": {
+                "status": "loaded" if (_stt_service is not None and _stt_service.is_initialized) else "not_loaded",
+                "model": "unsloth/whisper-large-v3"
+            },
+            "tts": {
+                "status": "ready",
+                "mode": "edge-tts",
+                "note": "Edge-TTS (Microsoft Azure) - no preload needed"
+            },
+            "llm": {
+                "status": "loaded" if len(_agents) > 0 else "not_loaded",
+                "agents_loaded": list(_agents.keys()),
+                "model": "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL"
+            }
+        }
     }
 
 

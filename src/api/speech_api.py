@@ -11,7 +11,7 @@ Usage:
     python -m src.api.speech_api
 
     # Or with uvicorn directly
-    uvicorn src.api.speech_api:app --host 0.0.0.0 --port 8301
+    uvicorn src.api.speech_api:app --host 0.0.0.0 --port 8600
 """
 
 import io
@@ -423,7 +423,7 @@ def main():
     import uvicorn
 
     host = os.getenv("SPEECH_API_HOST", "0.0.0.0")
-    port = int(os.getenv("SPEECH_API_PORT", "8301"))
+    port = int(os.getenv("SPEECH_API_PORT", "8600"))
 
     logger.info(f"Starting Speech API on {host}:{port}")
 

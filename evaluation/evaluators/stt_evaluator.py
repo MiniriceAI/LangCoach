@@ -86,7 +86,7 @@ class STTEvaluator(BaseEvaluator):
         super().__init__(config)
         self.mode = mode
         self.language = language
-        self.api_url = api_url or os.getenv("SPEECH_API_URL", "http://localhost:8301")
+        self.api_url = api_url or os.getenv("SPEECH_API_URL", "http://localhost:8600")
         self._service = None
 
     def initialize(self):

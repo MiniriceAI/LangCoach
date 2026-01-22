@@ -275,6 +275,12 @@ class ChatMessageRequest(BaseModel):
     message: str
 
 
+class ChatTips(BaseModel):
+    """对话提示"""
+    english: str = ""
+    chinese: str = ""
+
+
 class ChatMessageResponse(BaseModel):
     """消息响应"""
     reply: str
@@ -283,6 +289,7 @@ class ChatMessageResponse(BaseModel):
     session_ended: bool = False
     current_turn: int = 0
     report: Optional[Dict[str, Any]] = None
+    chat_tips: Optional[ChatTips] = None
 
 
 class ChatRateRequest(BaseModel):
@@ -348,6 +355,86 @@ def create_session(scenario: str, level: str, turns: int) -> Dict[str, Any]:
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     """Get session by ID."""
     return _sessions.get(session_id)
+
+
+def parse_llm_response(response_text: str) -> Dict[str, Any]:
+    """
+    解析LLM响应，分离直接回复和对话提示
+
+    LLM响应格式:
+    [直接回复内容 - 1-2句话]
+
+    **对话提示:**
+    [英文示例]
+    [中文示例]
+
+    返回:
+    {
+        "direct_response": "直接回复内容",
+        "chat_tips": {
+            "english": "英文示例",
+            "chinese": "中文示例"
+        }
+    }
+    """
+    import re
+
+    result = {
+        "direct_response": response_text.strip(),
+        "chat_tips": None
+    }
+
+    # 分离对话提示部分 - 查找 **对话提示:** 标记
+    tips_pattern = r'\*\*对话提示[：:]\*\*\s*\n(.+?)$'
+    tips_match = re.search(tips_pattern, response_text, re.DOTALL | re.IGNORECASE)
+
+    if tips_match:
+        # 获取对话提示内容
+        tips_content = tips_match.group(1).strip()
+
+        # 移除对话提示部分，获取直接回复
+        direct_response = response_text[:tips_match.start()].strip()
+
+        # 解析对话提示内容（英文和中文）
+        tips_lines = [line.strip() for line in tips_content.split('\n') if line.strip()]
+
+        english_tip = ""
+        chinese_tip = ""
+
+        # 第一行通常是英文，第二行是中文
+        if len(tips_lines) >= 1:
+            english_tip = tips_lines[0]
+        if len(tips_lines) >= 2:
+            chinese_tip = tips_lines[1]
+
+        # 如果没有找到中文，尝试从所有行中检测
+        if not chinese_tip:
+            for line in tips_lines:
+                if re.search(r'[\u4e00-\u9fff]', line):
+                    chinese_tip = line
+                    break
+
+        if english_tip or chinese_tip:
+            result["chat_tips"] = {
+                "english": english_tip,
+                "chinese": chinese_tip
+            }
+
+        result["direct_response"] = direct_response
+
+    # 清理直接回复中的任何格式标记
+    direct_response = result["direct_response"]
+
+    # 移除 **LangCoach:** 前缀（如果有）
+    direct_response = re.sub(r'^\*\*LangCoach[：:]\*\*\s*', '', direct_response)
+
+    # 移除其他可能的格式标记
+    direct_response = re.sub(r'^\*\*[^*]+\*\*\s*', '', direct_response)
+
+    # 清理多余的空白
+    result["direct_response"] = direct_response.strip()
+
+    return result
 
 
 # ============================================================
@@ -579,6 +666,7 @@ async def chat_message(request: ChatMessageRequest):
         # 获取 AI 回复
         scenario = session["scenario"]
         reply = "I understand. Could you tell me more about that?"
+        chat_tips = None
 
         # 使用 LLM 生成回复
         try:
@@ -586,15 +674,15 @@ async def chat_message(request: ChatMessageRequest):
             if llm:
                 # 构建完整的对话上下文
                 context = get_scenario_context(scenario, session["difficulty"])
-                
+
                 # 构建对话历史
                 conversation_history = ""
                 recent_messages = session["messages"][-config.service.max_recent_messages:]  # 使用配置的数量
-                
+
                 for msg in recent_messages:
                     role = "Human" if msg["role"] == "user" else "Assistant"
                     conversation_history += f"{role}: {msg['content']}\n"
-                
+
                 # 构建完整prompt
                 full_prompt = f"""{context}
 
@@ -602,25 +690,23 @@ async def chat_message(request: ChatMessageRequest):
 {conversation_history}
 Human: {request.message}
 Assistant:"""
-                
+
                 logger.info(f"Sending prompt to LLM (length: {len(full_prompt)} chars)")
-                
+
                 # 调用LLM
                 response = llm.invoke(full_prompt)
-                reply = response.content.strip()
-                
-                # 清理回复，确保格式正确
-                if reply.startswith("**LangCoach:**"):
-                    # 如果回复包含格式标记，提取实际内容
-                    lines = reply.split('\n')
-                    content_lines = []
-                    for line in lines:
-                        if line.startswith("**LangCoach:**"):
-                            content_lines.append(line.replace("**LangCoach:**", "").strip())
-                        elif not line.startswith("**对话提示:**") and line.strip():
-                            content_lines.append(line.strip())
-                    reply = " ".join(content_lines)
-                
+                raw_reply = response.content.strip()
+
+                # 解析LLM响应，分离直接回复和对话提示
+                parsed = parse_llm_response(raw_reply)
+                reply = parsed["direct_response"]
+
+                if parsed["chat_tips"]:
+                    chat_tips = ChatTips(
+                        english=parsed["chat_tips"]["english"],
+                        chinese=parsed["chat_tips"]["chinese"]
+                    )
+
                 # 限制回复长度
                 if len(reply) > config.service.max_reply_length:
                     # 截取到第一个完整句子结束
@@ -630,8 +716,10 @@ Assistant:"""
                         reply += '.'
                     if len(reply) > config.service.max_reply_sentences:
                         reply = reply[:config.service.max_reply_sentences] + "..."
-                
+
                 logger.info(f"LLM generated reply: {reply[:100]}...")
+                if chat_tips:
+                    logger.info(f"Chat tips: EN={chat_tips.english[:50]}..., CN={chat_tips.chinese[:50]}...")
             else:
                 logger.warning("LLM service not available, using fallback reply")
         except Exception as e:
@@ -640,14 +728,14 @@ Assistant:"""
         # 更新轮数
         session["current_turn"] += 1
 
-        # 保存 AI 回复
+        # 保存 AI 回复到 chat history（只保存直接回复，不包含对话提示）
         session["messages"].append({
             "role": "assistant",
             "content": reply,
             "timestamp": datetime.now().isoformat()
         })
 
-        # 生成音频URL
+        # 生成音频URL (只对直接回复生成TTS)
         audio_url = await generate_audio_url(reply, speaker=config.service.tts_default_speaker, fast_mode=True)
 
         # 检查是否结束
@@ -672,7 +760,8 @@ Assistant:"""
             feedback=None,
             session_ended=session_ended,
             current_turn=session["current_turn"],
-            report=report
+            report=report,
+            chat_tips=chat_tips
         )
 
     except HTTPException:

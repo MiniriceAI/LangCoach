@@ -11,7 +11,7 @@ source /workspace/miniconda3/bin/activate base
 
 # Default settings
 HOST=${SPEECH_API_HOST:-0.0.0.0}
-PORT=${SPEECH_API_PORT:-8600}
+PORT=${SPEECH_API_PORT:-8700}
 PRELOAD=${PRELOAD_MODELS:-true}  # 默认预加载模型，避免首次请求超时
 
 # Aggressively kill any existing process on the port

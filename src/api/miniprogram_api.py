@@ -46,10 +46,21 @@ logger = logging.getLogger(__name__)
 # Session storage (in production, use Redis)
 _sessions: Dict[str, Dict[str, Any]] = {}
 
+# Audio file cache (临时音频文件存储)
+_audio_cache: Dict[str, str] = {}
+
 # Lazy loaded services
 _tts_service = None
 _stt_service = None
+_llm_service = None
 _agents: Dict[str, Any] = {}
+
+# Service status tracking
+_service_status = {
+    "stt": {"status": "not_loaded", "model": "unsloth/whisper-large-v3"},
+    "tts": {"status": "loaded", "provider": "Edge-TTS"},
+    "llm": {"status": "not_loaded", "model": "GLM-4-9B", "provider": "Ollama"}
+}
 
 # ============================================================
 # Service Loaders
@@ -70,7 +81,69 @@ def get_stt_service():
     if _stt_service is None:
         from src.stt.service import initialize_stt_service
         _stt_service = initialize_stt_service()
+        _service_status["stt"]["status"] = "loaded"
     return _stt_service
+
+
+def get_llm_service():
+    """Lazy load LLM service."""
+    global _llm_service
+    if _llm_service is None:
+        try:
+            import requests
+            # 测试Ollama连接
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            if response.status_code == 200:
+                from langchain_ollama import ChatOllama
+                _llm_service = ChatOllama(
+                    model="hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL",
+                    base_url="http://localhost:11434",
+                    temperature=0.8,
+                    num_predict=2048
+                )
+                _service_status["llm"]["status"] = "loaded"
+                logger.info("LLM service (Ollama + GLM-4-9B) loaded successfully")
+            else:
+                logger.error("Ollama服务不可用")
+                _service_status["llm"]["status"] = "error"
+        except Exception as e:
+            logger.error(f"LLM service loading failed: {e}")
+            _service_status["llm"]["status"] = "error"
+    return _llm_service
+
+
+def get_scenario_context(scenario: str, difficulty: str) -> str:
+    """获取场景上下文提示"""
+    contexts = {
+        "job_interview": f"You are a professional job interviewer. Conduct a {difficulty} level interview. Ask relevant questions and provide helpful feedback.",
+        "hotel_checkin": f"You are a hotel receptionist helping with check-in. Use {difficulty} level English. Be professional and helpful.",
+        "renting": f"You are a property manager showing an apartment. Use {difficulty} level English. Be informative and answer questions about the property.",
+        "salary_negotiation": f"You are an HR manager discussing salary. Use {difficulty} level English. Be professional and negotiate fairly.",
+        "default": f"You are an English conversation partner. Use {difficulty} level English. Help practice conversation skills."
+    }
+    return contexts.get(scenario, contexts["default"])
+    if _llm_service is None:
+        try:
+            import requests
+            # 测试Ollama连接
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            if response.status_code == 200:
+                from langchain_ollama import ChatOllama
+                _llm_service = ChatOllama(
+                    model="hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL",
+                    base_url="http://localhost:11434",
+                    temperature=0.8,
+                    num_predict=2048
+                )
+                _service_status["llm"]["status"] = "loaded"
+                logger.info("LLM service (Ollama + GLM-4-9B) loaded successfully")
+            else:
+                logger.error("Ollama服务不可用")
+                _service_status["llm"]["status"] = "error"
+        except Exception as e:
+            logger.error(f"LLM service loading failed: {e}")
+            _service_status["llm"]["status"] = "error"
+    return _llm_service
 
 
 def get_agent(scenario: str):
@@ -81,6 +154,83 @@ def get_agent(scenario: str):
         _agents[scenario] = ScenarioAgent(scenario)
         logger.info(f"Loaded agent for scenario: {scenario}")
     return _agents[scenario]
+
+
+# ============================================================
+# Audio File Management
+# ============================================================
+
+async def generate_audio_url(text: str, speaker: str = "Ceylia", fast_mode: bool = True) -> Optional[str]:
+    """生成文本对应的音频URL"""
+    try:
+        # 生成音频文件名
+        audio_id = str(uuid.uuid4())
+        filename = f"{audio_id}.mp3"
+        
+        if fast_mode:
+            # 使用 Edge-TTS
+            audio_data = await _generate_edge_tts_audio_async(text, speaker)
+        else:
+            # 使用本地 TTS
+            audio_data = _generate_local_tts_audio(text, speaker)
+        
+        if audio_data:
+            # 将音频数据保存到临时文件
+            temp_dir = tempfile.gettempdir()
+            file_path = os.path.join(temp_dir, filename)
+            
+            with open(file_path, 'wb') as f:
+                f.write(audio_data)
+            
+            # 存储到缓存
+            _audio_cache[audio_id] = file_path
+            
+            # 返回访问URL
+            return f"/api/audio/{audio_id}"
+        
+        return None
+    except Exception as e:
+        logger.error(f"Failed to generate audio URL: {e}")
+        return None
+
+
+async def _generate_edge_tts_audio_async(text: str, speaker: str) -> Optional[bytes]:
+    """异步使用Edge-TTS生成音频数据"""
+    try:
+        import edge_tts
+        
+        voice = EDGE_TTS_VOICES.get(speaker, EDGE_TTS_VOICES["default"])
+        logger.info(f"[TTS] Edge-TTS voice: {voice}, text: {text[:30]}...")
+        
+        communicate = edge_tts.Communicate(text, voice)
+        buffer = io.BytesIO()
+        
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buffer.write(chunk["data"])
+        
+        return buffer.getvalue()
+        
+    except Exception as e:
+        logger.error(f"Edge-TTS generation failed: {e}")
+        return None
+
+
+def _generate_local_tts_audio(text: str, speaker: str) -> Optional[bytes]:
+    """使用本地TTS生成音频数据"""
+    try:
+        import soundfile as sf
+        
+        service = get_tts_service()
+        result = service.synthesize(text=text, speaker=speaker)
+        
+        buffer = io.BytesIO()
+        sf.write(buffer, result["audio"], result["sample_rate"], format="MP3")
+        return buffer.getvalue()
+        
+    except Exception as e:
+        logger.error(f"Local TTS generation failed: {e}")
+        return None
 
 
 # ============================================================
@@ -125,6 +275,7 @@ class ChatStartResponse(BaseModel):
     """开始对话响应"""
     session_id: str
     greeting: str
+    audio_url: Optional[str] = None
     scenario: str
     level: str
     max_turns: int
@@ -139,6 +290,7 @@ class ChatMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     """消息响应"""
     reply: str
+    audio_url: Optional[str] = None
     feedback: Optional[str] = None
     session_ended: bool = False
     current_turn: int = 0
@@ -243,14 +395,16 @@ async def lifespan(app: FastAPI):
         #     logger.error(f"[2/3] Failed to load TTS: {e}")
         logger.info("[2/3] TTS: Using Edge-TTS (no preload needed)")
 
-        # 3. 预加载 LLM Agent (Ollama + GLM-4-9B)
-        logger.info("[3/3] Loading LLM Agents (Ollama + GLM-4-9B)...")
+        # 3. 预加载 LLM 服务 (Ollama + GLM-4-9B)
+        logger.info("[3/3] Loading LLM service (Ollama + GLM-4-9B)...")
         try:
-            # 预加载第一个场景的 Agent，这会初始化 LLM 连接
-            get_agent(AVAILABLE_SCENARIOS[0])
-            logger.info("[3/3] LLM Agent loaded successfully")
+            get_llm_service()
+            if _service_status["llm"]["status"] == "loaded":
+                logger.info("[3/3] LLM service loaded successfully")
+            else:
+                logger.error("[3/3] LLM service failed to load")
         except Exception as e:
-            logger.error(f"[3/3] Failed to load LLM Agent: {e}")
+            logger.error(f"[3/3] Failed to load LLM service: {e}")
 
         logger.info("=" * 50)
         logger.info("All services loaded. API is ready!")
@@ -284,27 +438,15 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """健康检查"""
-    global _tts_service, _stt_service, _agents
     return {
         "status": "healthy",
         "service": "langcoach-miniprogram-api",
         "timestamp": datetime.now().isoformat(),
         "sessions_count": len(_sessions),
         "services": {
-            "stt": {
-                "status": "loaded" if (_stt_service is not None and _stt_service.is_initialized) else "not_loaded",
-                "model": "unsloth/whisper-large-v3"
-            },
-            "tts": {
-                "status": "ready",
-                "mode": "edge-tts",
-                "note": "Edge-TTS (Microsoft Azure) - no preload needed"
-            },
-            "llm": {
-                "status": "loaded" if len(_agents) > 0 else "not_loaded",
-                "agents_loaded": list(_agents.keys()),
-                "model": "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL"
-            }
+            "stt": _service_status["stt"],
+            "tts": _service_status["tts"],
+            "llm": _service_status["llm"]
         }
     }
 
@@ -326,6 +468,45 @@ async def list_scenarios():
 async def list_speakers():
     """获取可用的 TTS 语音角色"""
     return {"speakers": list(EDGE_TTS_VOICES.keys())}
+
+
+@app.get("/api/audio/{audio_id}")
+async def get_audio_file(audio_id: str):
+    """获取音频文件"""
+    try:
+        if audio_id not in _audio_cache:
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        file_path = _audio_cache[audio_id]
+        
+        if not os.path.exists(file_path):
+            # 清理失效的缓存条目
+            del _audio_cache[audio_id]
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        # 返回音频文件流
+        def iterfile(file_path: str):
+            with open(file_path, "rb") as f:
+                while True:
+                    chunk = f.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
+        
+        return StreamingResponse(
+            iterfile(file_path),
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f"attachment; filename={audio_id}.mp3",
+                "Cache-Control": "max-age=3600"  # 缓存1小时
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving audio file {audio_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================
@@ -372,9 +553,13 @@ async def chat_start(request: ChatStartRequest):
             "timestamp": datetime.now().isoformat()
         })
 
+        # 生成开场白音频URL
+        audio_url = await generate_audio_url(greeting, speaker="Ceylia", fast_mode=True)
+
         return ChatStartResponse(
             session_id=session["id"],
             greeting=greeting,
+            audio_url=audio_url,
             scenario=scenario,
             level=request.level,
             max_turns=request.turns
@@ -407,12 +592,22 @@ async def chat_message(request: ChatMessageRequest):
         scenario = session["scenario"]
         reply = "I understand. Could you tell me more about that?"
 
-        if scenario in AVAILABLE_SCENARIOS:
-            try:
-                agent = get_agent(scenario)
-                reply = agent.chat_with_history(request.message, session_id=request.session_id)
-            except Exception as e:
-                logger.error(f"Agent error: {e}")
+        # 使用 LLM 生成回复
+        try:
+            llm = get_llm_service()
+            if llm:
+                # 构建上下文提示
+                context = get_scenario_context(scenario, session["difficulty"])
+                full_prompt = f"{context}\n\nUser: {request.message}\nAssistant:"
+                
+                # 调用LLM
+                response = llm.invoke(full_prompt)
+                reply = response.content.strip()
+                logger.info(f"LLM generated reply: {reply[:100]}...")
+            else:
+                logger.warning("LLM service not available, using fallback reply")
+        except Exception as e:
+            logger.error(f"LLM inference error: {e}")
 
         # 更新轮数
         session["current_turn"] += 1
@@ -423,6 +618,9 @@ async def chat_message(request: ChatMessageRequest):
             "content": reply,
             "timestamp": datetime.now().isoformat()
         })
+
+        # 生成音频URL
+        audio_url = await generate_audio_url(reply, speaker="Ceylia", fast_mode=True)
 
         # 检查是否结束
         session_ended = session["current_turn"] >= session["max_turns"]
@@ -444,6 +642,7 @@ async def chat_message(request: ChatMessageRequest):
 
         return ChatMessageResponse(
             reply=reply,
+            audio_url=audio_url,
             feedback=None,
             session_ended=session_ended,
             current_turn=session["current_turn"],

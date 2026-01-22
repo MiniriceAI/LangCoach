@@ -22,7 +22,7 @@ set -e
 cd /workspace/LangCoach
 
 # Use base conda environment
-source /workspace/miniconda3/bin/activate base
+source /workspace/miniconda3/bin/activate lm
 
 # Default settings
 HOST=${API_HOST:-0.0.0.0}

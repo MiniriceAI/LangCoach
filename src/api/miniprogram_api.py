@@ -29,6 +29,9 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
+import asyncio
+import json
 
 # Import configuration
 from src.api.config import config
@@ -768,6 +771,225 @@ Assistant:"""
         raise
     except Exception as e:
         logger.error(f"Message error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat/message/stream")
+async def chat_message_stream(request: ChatMessageRequest):
+    """发送消息并获取 AI 流式回复 (优化延时)"""
+
+    async def event_generator():
+        try:
+            session = get_session(request.session_id)
+            if not session:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Session not found"})
+                }
+                return
+
+            if session["ended"]:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Session has ended"})
+                }
+                return
+
+            # 保存用户消息
+            session["messages"].append({
+                "role": "user",
+                "content": request.message,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # 获取 AI 回复
+            scenario = session["scenario"]
+            reply_chunks = []
+            chat_tips = None
+
+            # 使用 LLM 生成流式回复
+            try:
+                llm = get_llm_service()
+                if llm:
+                    # 构建完整的对话上下文
+                    context = get_scenario_context(scenario, session["difficulty"])
+
+                    # 构建对话历史
+                    conversation_history = ""
+                    recent_messages = session["messages"][-config.service.max_recent_messages:]
+
+                    for msg in recent_messages:
+                        role = "Human" if msg["role"] == "user" else "Assistant"
+                        conversation_history += f"{role}: {msg['content']}\n"
+
+                    # 构建完整prompt
+                    full_prompt = f"""{context}
+
+**Conversation History:**
+{conversation_history}
+Human: {request.message}
+Assistant:"""
+
+                    logger.info(f"[Stream] Sending prompt to LLM (length: {len(full_prompt)} chars)")
+
+                    # 发送开始事件
+                    yield {
+                        "event": "start",
+                        "data": json.dumps({"status": "generating"})
+                    }
+
+                    # 流式调用LLM
+                    full_response = ""
+                    for chunk in llm.stream(full_prompt):
+                        if hasattr(chunk, 'content'):
+                            content = chunk.content
+                            full_response += content
+                            reply_chunks.append(content)
+
+                            # 发送文本块
+                            yield {
+                                "event": "text",
+                                "data": json.dumps({"content": content})
+                            }
+
+                    # 解析完整响应
+                    parsed = parse_llm_response(full_response)
+                    reply = parsed["direct_response"]
+
+                    if parsed["chat_tips"]:
+                        chat_tips = {
+                            "english": parsed["chat_tips"]["english"],
+                            "chinese": parsed["chat_tips"]["chinese"]
+                        }
+
+                    logger.info(f"[Stream] LLM generation complete: {len(reply)} chars")
+
+                    # 发送完整回复事件
+                    yield {
+                        "event": "reply_complete",
+                        "data": json.dumps({
+                            "reply": reply,
+                            "chat_tips": chat_tips
+                        })
+                    }
+
+                    # 更新轮数
+                    session["current_turn"] += 1
+
+                    # 保存 AI 回复
+                    session["messages"].append({
+                        "role": "assistant",
+                        "content": reply,
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                    # 异步生成音频 (不阻塞)
+                    asyncio.create_task(
+                        generate_and_notify_audio(request.session_id, reply)
+                    )
+
+                    # 检查是否结束
+                    session_ended = session["current_turn"] >= session["max_turns"]
+                    report = None
+
+                    if session_ended:
+                        session["ended"] = True
+                        scores = config.generate_random_scores()
+                        tips = config.get_random_tips(3)
+                        report = {
+                            "grammarScore": scores["grammarScore"],
+                            "vocabularyScore": scores["vocabularyScore"],
+                            "fluencyScore": scores["fluencyScore"],
+                            "totalTurns": session["current_turn"],
+                            "tips": tips
+                        }
+
+                    # 发送会话状态
+                    yield {
+                        "event": "session_status",
+                        "data": json.dumps({
+                            "session_ended": session_ended,
+                            "current_turn": session["current_turn"],
+                            "report": report
+                        })
+                    }
+
+                else:
+                    logger.warning("[Stream] LLM service not available")
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"error": "LLM service not available"})
+                    }
+
+            except Exception as e:
+                logger.error(f"[Stream] LLM inference error: {e}")
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": str(e)})
+                }
+
+            # 发送结束事件
+            yield {
+                "event": "done",
+                "data": json.dumps({"status": "complete"})
+            }
+
+        except Exception as e:
+            logger.error(f"[Stream] Error: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)})
+            }
+
+    return EventSourceResponse(event_generator())
+
+
+async def generate_and_notify_audio(session_id: str, text: str):
+    """后台生成音频并通知客户端"""
+    try:
+        logger.info(f"[TTS] Starting background audio generation for session {session_id}")
+
+        # 生成音频
+        audio_url = await generate_audio_url(
+            text,
+            speaker=config.service.tts_default_speaker,
+            fast_mode=True
+        )
+
+        if audio_url:
+            logger.info(f"[TTS] Audio generated: {audio_url}")
+            # 存储到会话中，供后续查询
+            session = get_session(session_id)
+            if session and session["messages"]:
+                # 更新最后一条助手消息的音频URL
+                for msg in reversed(session["messages"]):
+                    if msg["role"] == "assistant":
+                        msg["audio_url"] = audio_url
+                        break
+        else:
+            logger.warning(f"[TTS] Failed to generate audio for session {session_id}")
+
+    except Exception as e:
+        logger.error(f"[TTS] Background audio generation error: {e}")
+
+
+@app.get("/api/chat/audio/{session_id}")
+async def get_latest_audio(session_id: str):
+    """获取会话最新的音频URL"""
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # 查找最后一条助手消息的音频
+        for msg in reversed(session["messages"]):
+            if msg["role"] == "assistant" and msg.get("audio_url"):
+                return {"audio_url": msg["audio_url"]}
+
+        return {"audio_url": None}
+
+    except Exception as e:
+        logger.error(f"Get audio error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

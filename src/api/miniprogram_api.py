@@ -30,6 +30,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+# Import configuration
+from src.api.config import config
+
 # ============================================================
 # Logging Configuration
 # ============================================================
@@ -57,9 +60,9 @@ _agents: Dict[str, Any] = {}
 
 # Service status tracking
 _service_status = {
-    "stt": {"status": "not_loaded", "model": "unsloth/whisper-large-v3"},
+    "stt": {"status": "not_loaded", "model": config.service.stt_model},
     "tts": {"status": "loaded", "provider": "Edge-TTS"},
-    "llm": {"status": "not_loaded", "model": "GLM-4-9B", "provider": "Ollama"}
+    "llm": {"status": "not_loaded", "model": config.service.ollama_model.split("/")[-1], "provider": "Ollama"}
 }
 
 # ============================================================
@@ -85,55 +88,59 @@ def get_stt_service():
     return _stt_service
 
 
+
+
+
+def get_scenario_context(scenario: str, difficulty: str) -> str:
+    """获取场景上下文提示"""
+    import os
+    
+    # 尝试读取prompt文件
+    prompt_file = config.get_prompt_path(scenario)
+    if os.path.exists(prompt_file):
+        try:
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                prompt_content = f.read()
+            
+            # 在prompt中添加难度级别说明
+            difficulty_instruction = f"\n\n**Additional Instructions:**\nUse {difficulty} level English. Keep responses short and conversational (1-2 sentences max). Focus on interactive dialogue, not long explanations."
+            
+            return prompt_content + difficulty_instruction
+        except Exception as e:
+            logger.error(f"Failed to load prompt file {prompt_file}: {e}")
+    
+    # 回退到默认context - 基于配置构建
+    contexts = {}
+    for scenario_id in config.content.available_scenarios + ["default"]:
+        if scenario_id == "job_interview":
+            contexts[scenario_id] = f"You are a professional job interviewer. Conduct a {difficulty} level interview. Keep responses short and interactive. Ask one question at a time."
+        elif scenario_id == "hotel_checkin":
+            contexts[scenario_id] = f"You are a hotel receptionist helping with check-in. Use {difficulty} level English. Keep responses brief and professional."
+        elif scenario_id == "renting":
+            contexts[scenario_id] = f"You are a property manager showing an apartment. Use {difficulty} level English. Keep responses short and conversational. Focus on one topic at a time."
+        elif scenario_id == "salary_negotiation":
+            contexts[scenario_id] = f"You are an HR manager discussing salary. Use {difficulty} level English. Keep responses brief and professional."
+        else:
+            contexts[scenario_id] = f"You are an English conversation partner. Use {difficulty} level English. Keep responses short and encouraging."
+    return contexts.get(scenario, contexts["default"])
+
+
 def get_llm_service():
-    """Lazy load LLM service."""
+    """获取LLM服务实例"""
     global _llm_service
     if _llm_service is None:
         try:
             import requests
             # 测试Ollama连接
-            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            response = requests.get(config.get_ollama_url("api/tags"), timeout=config.service.ollama_timeout)
             if response.status_code == 200:
                 from langchain_ollama import ChatOllama
                 _llm_service = ChatOllama(
-                    model="hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL",
-                    base_url="http://localhost:11434",
-                    temperature=0.8,
-                    num_predict=2048
-                )
-                _service_status["llm"]["status"] = "loaded"
-                logger.info("LLM service (Ollama + GLM-4-9B) loaded successfully")
-            else:
-                logger.error("Ollama服务不可用")
-                _service_status["llm"]["status"] = "error"
-        except Exception as e:
-            logger.error(f"LLM service loading failed: {e}")
-            _service_status["llm"]["status"] = "error"
-    return _llm_service
-
-
-def get_scenario_context(scenario: str, difficulty: str) -> str:
-    """获取场景上下文提示"""
-    contexts = {
-        "job_interview": f"You are a professional job interviewer. Conduct a {difficulty} level interview. Ask relevant questions and provide helpful feedback.",
-        "hotel_checkin": f"You are a hotel receptionist helping with check-in. Use {difficulty} level English. Be professional and helpful.",
-        "renting": f"You are a property manager showing an apartment. Use {difficulty} level English. Be informative and answer questions about the property.",
-        "salary_negotiation": f"You are an HR manager discussing salary. Use {difficulty} level English. Be professional and negotiate fairly.",
-        "default": f"You are an English conversation partner. Use {difficulty} level English. Help practice conversation skills."
-    }
-    return contexts.get(scenario, contexts["default"])
-    if _llm_service is None:
-        try:
-            import requests
-            # 测试Ollama连接
-            response = requests.get("http://localhost:11434/api/tags", timeout=5)
-            if response.status_code == 200:
-                from langchain_ollama import ChatOllama
-                _llm_service = ChatOllama(
-                    model="hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL",
-                    base_url="http://localhost:11434",
-                    temperature=0.8,
-                    num_predict=2048
+                    model=config.service.ollama_model,
+                    base_url=config.service.ollama_base_url,
+                    temperature=config.service.ollama_temperature,
+                    num_predict=config.service.ollama_num_predict,
+                    stop=config.service.ollama_stop_tokens
                 )
                 _service_status["llm"]["status"] = "loaded"
                 logger.info("LLM service (Ollama + GLM-4-9B) loaded successfully")
@@ -160,8 +167,10 @@ def get_agent(scenario: str):
 # Audio File Management
 # ============================================================
 
-async def generate_audio_url(text: str, speaker: str = "Ceylia", fast_mode: bool = True) -> Optional[str]:
+async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = True) -> Optional[str]:
     """生成文本对应的音频URL"""
+    if speaker is None:
+        speaker = config.service.tts_default_speaker
     try:
         # 生成音频文件名
         audio_id = str(uuid.uuid4())
@@ -199,7 +208,7 @@ async def _generate_edge_tts_audio_async(text: str, speaker: str) -> Optional[by
     try:
         import edge_tts
         
-        voice = EDGE_TTS_VOICES.get(speaker, EDGE_TTS_VOICES["default"])
+        voice = config.get_edge_tts_voice(speaker)
         logger.info(f"[TTS] Edge-TTS voice: {voice}, text: {text[:30]}...")
         
         communicate = edge_tts.Communicate(text, voice)
@@ -234,30 +243,9 @@ def _generate_local_tts_audio(text: str, speaker: str) -> Optional[bytes]:
 
 
 # ============================================================
-# Constants
+# Constants (moved to config.py)
 # ============================================================
-
-AVAILABLE_SCENARIOS = ["job_interview", "hotel_checkin", "renting", "salary_negotiation"]
-
-DEFAULT_GREETINGS = {
-    "job_interview": "Hello! I'm your interviewer today. Please have a seat and let's begin. Could you start by telling me a little about yourself?",
-    "hotel_checkin": "Good evening! Welcome to our hotel. I'll be helping you with check-in today. May I have your name and reservation details, please?",
-    "renting": "Hi there! I'm the property manager. I understand you're interested in renting this apartment. Would you like me to show you around first?",
-    "salary_negotiation": "Thank you for coming in today. We've reviewed your application and would like to discuss the compensation package. What are your salary expectations?",
-    "default": "Hi there! I'm your English practice partner. What would you like to talk about today?"
-}
-
-LEVEL_TO_DIFFICULTY = {
-    "A1": "primary", "A2": "primary",
-    "B1": "medium", "B2": "medium",
-    "C1": "advanced", "C2": "advanced",
-}
-
-EDGE_TTS_VOICES = {
-    "Ceylia": "en-US-JennyNeural",
-    "Tifa": "en-US-AriaNeural",
-    "default": "en-US-JennyNeural"
-}
+# All constants are now managed in src.api.config
 
 # ============================================================
 # Pydantic Models
@@ -315,7 +303,7 @@ class ChatFeedbackRequest(BaseModel):
 class SynthesizeRequest(BaseModel):
     """语音合成请求"""
     text: str
-    speaker: str = "Ceylia"
+    speaker: str = None  # Will use config default if None
     fast_mode: bool = True
 
 
@@ -344,7 +332,7 @@ def create_session(scenario: str, level: str, turns: int) -> Dict[str, Any]:
         "id": session_id,
         "scenario": scenario,
         "level": level,
-        "difficulty": LEVEL_TO_DIFFICULTY.get(level, "medium"),
+        "difficulty": config.get_difficulty_for_level(level),
         "max_turns": turns,
         "current_turn": 0,
         "messages": [],
@@ -425,7 +413,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.service.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -455,11 +443,11 @@ async def health_check():
 async def list_scenarios():
     """获取可用场景列表"""
     scenarios = []
-    for scenario_id in AVAILABLE_SCENARIOS:
+    for scenario_id in config.content.available_scenarios:
         scenarios.append({
             "id": scenario_id,
             "title": scenario_id.replace("_", " ").title(),
-            "greeting": DEFAULT_GREETINGS.get(scenario_id, DEFAULT_GREETINGS["default"]),
+            "greeting": config.content.default_greetings.get(scenario_id, config.content.default_greetings["default"]),
         })
     return {"scenarios": scenarios}
 
@@ -467,7 +455,7 @@ async def list_scenarios():
 @app.get("/api/speakers")
 async def list_speakers():
     """获取可用的 TTS 语音角色"""
-    return {"speakers": list(EDGE_TTS_VOICES.keys())}
+    return {"speakers": list(config.service.edge_tts_voices.keys())}
 
 
 @app.get("/api/audio/{audio_id}")
@@ -498,7 +486,7 @@ async def get_audio_file(audio_id: str):
             media_type="audio/mpeg",
             headers={
                 "Content-Disposition": f"attachment; filename={audio_id}.mp3",
-                "Cache-Control": "max-age=3600"  # 缓存1小时
+                "Cache-Control": f"max-age={config.service.audio_cache_hours * 3600}"
             }
         )
         
@@ -523,7 +511,7 @@ async def chat_start(request: ChatStartRequest):
             scenario = request.scenario.get("scenario") or request.scenario.get("id") or "default"
 
         # 验证场景
-        if scenario not in AVAILABLE_SCENARIOS and scenario != "default":
+        if not config.is_scenario_available(scenario):
             logger.warning(f"Unknown scenario: {scenario}, using job_interview")
             scenario = "job_interview"
 
@@ -531,18 +519,18 @@ async def chat_start(request: ChatStartRequest):
         session = create_session(scenario, request.level, request.turns)
 
         # 获取开场白
-        greeting = DEFAULT_GREETINGS.get(scenario, DEFAULT_GREETINGS["default"])
+        greeting = config.content.default_greetings.get(scenario, config.content.default_greetings["default"])
 
         # 尝试使用 Agent 获取开场白
-        if scenario in AVAILABLE_SCENARIOS:
+        if scenario in config.content.available_scenarios:
             try:
                 agent = get_agent(scenario)
                 from src.agents.conversation_config import create_config
-                config = create_config(
+                agent_config = create_config(
                     turns=request.turns,
-                    difficulty=LEVEL_TO_DIFFICULTY.get(request.level, "medium")
+                    difficulty=config.get_difficulty_for_level(request.level)
                 )
-                greeting = agent.start_new_session(session_id=session["id"], config=config)
+                greeting = agent.start_new_session(session_id=session["id"], config=agent_config)
             except Exception as e:
                 logger.error(f"Agent init failed: {e}, using default greeting")
 
@@ -554,7 +542,7 @@ async def chat_start(request: ChatStartRequest):
         })
 
         # 生成开场白音频URL
-        audio_url = await generate_audio_url(greeting, speaker="Ceylia", fast_mode=True)
+        audio_url = await generate_audio_url(greeting, speaker=config.service.tts_default_speaker, fast_mode=True)
 
         return ChatStartResponse(
             session_id=session["id"],
@@ -596,13 +584,53 @@ async def chat_message(request: ChatMessageRequest):
         try:
             llm = get_llm_service()
             if llm:
-                # 构建上下文提示
+                # 构建完整的对话上下文
                 context = get_scenario_context(scenario, session["difficulty"])
-                full_prompt = f"{context}\n\nUser: {request.message}\nAssistant:"
+                
+                # 构建对话历史
+                conversation_history = ""
+                recent_messages = session["messages"][-config.service.max_recent_messages:]  # 使用配置的数量
+                
+                for msg in recent_messages:
+                    role = "Human" if msg["role"] == "user" else "Assistant"
+                    conversation_history += f"{role}: {msg['content']}\n"
+                
+                # 构建完整prompt
+                full_prompt = f"""{context}
+
+**Conversation History:**
+{conversation_history}
+Human: {request.message}
+Assistant:"""
+                
+                logger.info(f"Sending prompt to LLM (length: {len(full_prompt)} chars)")
                 
                 # 调用LLM
                 response = llm.invoke(full_prompt)
                 reply = response.content.strip()
+                
+                # 清理回复，确保格式正确
+                if reply.startswith("**LangCoach:**"):
+                    # 如果回复包含格式标记，提取实际内容
+                    lines = reply.split('\n')
+                    content_lines = []
+                    for line in lines:
+                        if line.startswith("**LangCoach:**"):
+                            content_lines.append(line.replace("**LangCoach:**", "").strip())
+                        elif not line.startswith("**对话提示:**") and line.strip():
+                            content_lines.append(line.strip())
+                    reply = " ".join(content_lines)
+                
+                # 限制回复长度
+                if len(reply) > config.service.max_reply_length:
+                    # 截取到第一个完整句子结束
+                    sentences = reply.split('. ')
+                    reply = sentences[0]
+                    if not reply.endswith('.'):
+                        reply += '.'
+                    if len(reply) > config.service.max_reply_sentences:
+                        reply = reply[:config.service.max_reply_sentences] + "..."
+                
                 logger.info(f"LLM generated reply: {reply[:100]}...")
             else:
                 logger.warning("LLM service not available, using fallback reply")
@@ -620,7 +648,7 @@ async def chat_message(request: ChatMessageRequest):
         })
 
         # 生成音频URL
-        audio_url = await generate_audio_url(reply, speaker="Ceylia", fast_mode=True)
+        audio_url = await generate_audio_url(reply, speaker=config.service.tts_default_speaker, fast_mode=True)
 
         # 检查是否结束
         session_ended = session["current_turn"] >= session["max_turns"]
@@ -628,16 +656,14 @@ async def chat_message(request: ChatMessageRequest):
 
         if session_ended:
             session["ended"] = True
+            scores = config.generate_random_scores()
+            tips = config.get_random_tips(3)
             report = {
-                "grammarScore": 85,
-                "vocabularyScore": 78,
-                "fluencyScore": 82,
+                "grammarScore": scores["grammarScore"],
+                "vocabularyScore": scores["vocabularyScore"],
+                "fluencyScore": scores["fluencyScore"],
                 "totalTurns": session["current_turn"],
-                "tips": [
-                    "Try using more complex sentence structures",
-                    "Good use of vocabulary!",
-                    "Practice speaking more fluently"
-                ]
+                "tips": tips
             }
 
         return ChatMessageResponse(
@@ -705,7 +731,7 @@ async def transcribe(
 
         try:
             # 加载并转录
-            audio_data, sr = librosa.load(tmp_path, sr=16000)
+            audio_data, sr = librosa.load(tmp_path, sr=config.service.stt_sample_rate)
             result = service.transcribe(
                 audio=audio_data,
                 sample_rate=sr,
@@ -730,12 +756,13 @@ async def transcribe(
 async def synthesize(request: SynthesizeRequest):
     """文字转语音（返回 base64 编码的音频）"""
     try:
+        speaker = request.speaker or config.service.tts_default_speaker
         if request.fast_mode:
             # 使用 Edge-TTS 快速模式
-            return await _synthesize_edge_tts(request.text, request.speaker)
+            return await _synthesize_edge_tts(request.text, speaker)
         else:
             # 使用本地 TTS 模型
-            return await _synthesize_local(request.text, request.speaker)
+            return await _synthesize_local(request.text, speaker)
 
     except Exception as e:
         logger.error(f"Synthesis error: {e}")
@@ -747,7 +774,7 @@ async def _synthesize_edge_tts(text: str, speaker: str) -> JSONResponse:
     try:
         import edge_tts
 
-        voice = EDGE_TTS_VOICES.get(speaker, EDGE_TTS_VOICES["default"])
+        voice = config.get_edge_tts_voice(speaker)
         logger.info(f"[TTS] Edge-TTS voice: {voice}, text: {text[:30]}...")
 
         communicate = edge_tts.Communicate(text, voice)
@@ -761,10 +788,10 @@ async def _synthesize_edge_tts(text: str, speaker: str) -> JSONResponse:
 
         return JSONResponse({
             "audio_base64": base64.b64encode(audio_bytes).decode("utf-8"),
-            "sample_rate": 24000,
+            "sample_rate": config.service.tts_sample_rate,
             "speaker": speaker,
             "text": text,
-            "format": "mp3"
+            "format": config.service.tts_format
         })
 
     except ImportError:
@@ -795,26 +822,13 @@ async def _synthesize_local(text: str, speaker: str) -> JSONResponse:
 # Dictionary Endpoint
 # ============================================================
 
-# 简单词典（生产环境应使用真实词典 API）
-SIMPLE_DICTIONARY = {
-    "hello": {"phonetic": "/həˈloʊ/", "definition": "used as a greeting"},
-    "interview": {"phonetic": "/ˈɪntərˌvjuː/", "definition": "a formal meeting for assessment"},
-    "salary": {"phonetic": "/ˈsæləri/", "definition": "fixed regular payment for work"},
-    "experience": {"phonetic": "/ɪkˈspɪriəns/", "definition": "practical contact with events"},
-    "hotel": {"phonetic": "/hoʊˈtel/", "definition": "an establishment providing lodging"},
-    "apartment": {"phonetic": "/əˈpɑːrtmənt/", "definition": "a self-contained housing unit"},
-    "rent": {"phonetic": "/rent/", "definition": "payment for use of property"},
-    "negotiate": {"phonetic": "/nɪˈɡoʊʃieɪt/", "definition": "to discuss to reach an agreement"},
-}
-
-
 @app.get("/api/dictionary", response_model=DictionaryResponse)
 async def dictionary_lookup(word: str):
     """查询单词释义"""
     word_lower = word.lower().strip()
 
-    if word_lower in SIMPLE_DICTIONARY:
-        entry = SIMPLE_DICTIONARY[word_lower]
+    if word_lower in config.content.simple_dictionary:
+        entry = config.content.simple_dictionary[word_lower]
         return DictionaryResponse(
             word=word,
             phonetic=entry["phonetic"],
@@ -872,7 +886,7 @@ async def legacy_synthesize(request: SynthesizeRequest):
     try:
         if request.fast_mode:
             import edge_tts
-            voice = EDGE_TTS_VOICES.get(request.speaker, EDGE_TTS_VOICES["default"])
+            voice = config.get_edge_tts_voice(request.speaker or config.service.tts_default_speaker)
             communicate = edge_tts.Communicate(request.text, voice)
             buffer = io.BytesIO()
 
@@ -920,15 +934,12 @@ def main():
     """Run the API server."""
     import uvicorn
 
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8600"))
-
-    logger.info(f"Starting API on {host}:{port}")
+    logger.info(f"Starting API on {config.service.api_host}:{config.service.api_port}")
 
     uvicorn.run(
         "src.api.miniprogram_api:app",
-        host=host,
-        port=port,
+        host=config.service.api_host,
+        port=config.service.api_port,
         reload=False
     )
 

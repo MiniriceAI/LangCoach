@@ -425,14 +425,16 @@ def parse_llm_response(response_text: str) -> Dict[str, Any]:
     # 清理直接回复中的任何格式标记
     direct_response = result["direct_response"]
 
-    # 移除 **LangCoach:** 前缀（如果有）
-    direct_response = re.sub(r'^\*\*LangCoach[：:]\*\*\s*', '', direct_response)
+    # 移除所有行中的 **LangCoach:** 前缀（不仅仅是开头）
+    # 匹配行首的 **LangCoach:** 或 **LangCoach：** (支持中英文冒号)
+    direct_response = re.sub(r'^\*\*LangCoach[：:]\*\*\s*', '', direct_response, flags=re.MULTILINE)
+    
+    # 移除可能的其他格式标记（如 **Teacher:** 等）
+    direct_response = re.sub(r'^\*\*[A-Za-z]+[：:]\*\*\s*', '', direct_response, flags=re.MULTILINE)
 
-    # 移除其他可能的格式标记
-    direct_response = re.sub(r'^\*\*[^*]+\*\*\s*', '', direct_response)
-
-    # 清理多余的空白
-    result["direct_response"] = direct_response.strip()
+    # 清理多余的空白和换行
+    direct_response = direct_response.strip()
+    result["direct_response"] = direct_response
 
     return result
 

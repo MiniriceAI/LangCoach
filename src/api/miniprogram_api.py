@@ -52,6 +52,9 @@ _sessions: Dict[str, Dict[str, Any]] = {}
 # Audio file cache (临时音频文件存储)
 _audio_cache: Dict[str, str] = {}
 
+# Custom scenario prompts cache (临时自定义场景prompt存储)
+_custom_scenario_prompts: Dict[str, str] = {}
+
 # Lazy loaded services
 _tts_service = None
 _stt_service = None
@@ -88,13 +91,25 @@ def get_stt_service():
     return _stt_service
 
 
-
+def get_custom_scenario_context(scenario_id: str, difficulty: str) -> Optional[str]:
+    """获取自定义场景的上下文"""
+    if scenario_id in _custom_scenario_prompts:
+        prompt_content = _custom_scenario_prompts[scenario_id]
+        difficulty_instruction = f"\n\n**Additional Instructions:**\nUse {difficulty} level English. Keep responses short and conversational (1-2 sentences max). Focus on interactive dialogue, not long explanations."
+        return prompt_content + difficulty_instruction
+    return None
 
 
 def get_scenario_context(scenario: str, difficulty: str) -> str:
     """获取场景上下文提示"""
     import os
-    
+
+    # 首先检查是否是自定义场景
+    if scenario.startswith("custom_"):
+        custom_context = get_custom_scenario_context(scenario, difficulty)
+        if custom_context:
+            return custom_context
+
     # 尝试读取prompt文件
     prompt_file = config.get_prompt_path(scenario)
     if os.path.exists(prompt_file):
@@ -304,6 +319,44 @@ class ChatFeedbackRequest(BaseModel):
     session_id: str
     message_id: str
     feedback: str
+
+
+# --- Custom Scenario Models ---
+class CustomScenarioExtractRequest(BaseModel):
+    """自定义场景提取请求"""
+    user_input: str  # 用户输入的场景描述，如"小学三年级学生，去超市买文具"
+
+
+class CustomScenarioExtractResponse(BaseModel):
+    """自定义场景提取响应"""
+    ai_role: str  # AI扮演的角色
+    ai_role_cn: str  # AI角色中文
+    user_role: str  # 用户扮演的角色
+    user_role_cn: str  # 用户角色中文
+    goal: str  # 对话目标
+    goal_cn: str  # 目标中文
+    challenge: str  # 挑战
+    challenge_cn: str  # 挑战中文
+    greeting: str  # 随机开场白
+    difficulty_level: str  # 难度级别: easy, medium, hard
+    speaking_speed: str  # 语速: slow, medium, fast
+    vocabulary: str  # 词汇难度: simple, medium, advanced
+    scenario_summary: str  # 场景摘要
+    scenario_summary_cn: str  # 场景摘要中文
+
+
+class CustomScenarioGenerateRequest(BaseModel):
+    """自定义场景生成prompt请求"""
+    scenario_info: CustomScenarioExtractResponse
+    user_input: str  # 原始用户输入
+
+
+class CustomScenarioGenerateResponse(BaseModel):
+    """自定义场景生成prompt响应"""
+    scenario_id: str  # 临时场景ID
+    prompt_content: str  # 生成的prompt内容
+    greeting: str  # 开场白
+    audio_url: Optional[str] = None  # 开场白音频URL
 
 
 # --- Speech Models ---
@@ -596,22 +649,35 @@ async def chat_start(request: ChatStartRequest):
     try:
         # 确定场景
         scenario = "default"
+        custom_greeting = None
+
         if request.scenario:
             scenario = request.scenario.get("scenario") or request.scenario.get("id") or "default"
+            # 检查是否有自定义场景的开场白
+            custom_greeting = request.scenario.get("greeting")
 
-        # 验证场景
-        if not config.is_scenario_available(scenario):
+        # 验证场景 - 自定义场景以 custom_ 开头
+        is_custom_scenario = scenario.startswith("custom_")
+        if not is_custom_scenario and not config.is_scenario_available(scenario):
             logger.warning(f"Unknown scenario: {scenario}, using job_interview")
             scenario = "job_interview"
 
-        # 创建会话
-        session = create_session(scenario, request.level, request.turns)
+        # 创建会话 - 自定义场景不限制轮数
+        max_turns = 9999 if is_custom_scenario else request.turns
+        session = create_session(scenario, request.level, max_turns)
 
         # 获取开场白
-        greeting = config.content.default_greetings.get(scenario, config.content.default_greetings["default"])
+        if custom_greeting:
+            # 使用自定义场景的开场白
+            greeting = custom_greeting
+        elif is_custom_scenario:
+            # 自定义场景但没有提供开场白
+            greeting = "Hello! I'm ready to help you practice. What would you like to talk about?"
+        else:
+            greeting = config.content.default_greetings.get(scenario, config.content.default_greetings["default"])
 
-        # 尝试使用 Agent 获取开场白
-        if scenario in config.content.available_scenarios:
+        # 尝试使用 Agent 获取开场白（仅对非自定义场景）
+        if not is_custom_scenario and scenario in config.content.available_scenarios:
             try:
                 agent = get_agent(scenario)
                 from src.agents.conversation_config import create_config
@@ -907,6 +973,232 @@ async def _synthesize_local(text: str, speaker: str) -> JSONResponse:
         "text": result["text"],
         "format": "wav"
     })
+
+
+# ============================================================
+# Custom Scenario Endpoints
+# ============================================================
+
+SCENARIO_EXTRACT_PROMPT = """You are an expert at analyzing language learning scenarios. Given a user's description of a custom conversation scenario, extract the following information in JSON format.
+
+User's scenario description: "{user_input}"
+
+Please analyze this scenario and extract:
+1. ai_role: The role AI should play (e.g., "supermarket cashier", "hotel receptionist")
+2. ai_role_cn: Chinese translation of AI role
+3. user_role: The role the user will play (e.g., "third-grade student", "tourist")
+4. user_role_cn: Chinese translation of user role
+5. goal: The main goal of the conversation in English
+6. goal_cn: Chinese translation of the goal
+7. challenge: What makes this conversation challenging for the learner
+8. challenge_cn: Chinese translation of the challenge
+9. greeting: A natural opening line from the AI character (in English, 1-2 sentences)
+10. difficulty_level: Based on the scenario, determine difficulty - "easy" (for children/beginners), "medium" (everyday situations), "hard" (professional/complex)
+11. speaking_speed: Recommended speaking speed - "slow" (for beginners/children), "medium" (normal), "fast" (advanced)
+12. vocabulary: Vocabulary complexity - "simple" (basic words), "medium" (everyday vocabulary), "advanced" (specialized terms)
+13. scenario_summary: A brief English summary of the scenario (1-2 sentences)
+14. scenario_summary_cn: Chinese translation of the summary
+
+Important rules:
+- If the user mentions children, students, or beginners, set difficulty_level to "easy", speaking_speed to "slow", vocabulary to "simple"
+- If the scenario involves professional settings (business, medical, legal), set difficulty_level to "hard"
+- The greeting should be natural and in-character for the AI role
+- All fields must be filled with reasonable defaults if not explicitly mentioned
+
+Respond ONLY with valid JSON, no other text:
+"""
+
+SCENARIO_PROMPT_TEMPLATE = """**System Prompt: Custom Scenario - {scenario_summary}**
+
+**Role**:
+You are a {ai_role}. The user is playing the role of a {user_role}.
+
+**Scenario Context**:
+{scenario_summary}
+
+**Task**:
+- Conduct a realistic conversation in this scenario
+- Help the user practice English through natural dialogue
+- Keep responses SHORT (1-2 sentences max) and natural
+- Always respond in English, even if user speaks Chinese
+- Provide dialogue hints to guide the student's next response
+
+**Difficulty Settings**:
+- Level: {difficulty_level}
+- Speaking Speed: {speaking_speed}
+- Vocabulary: {vocabulary}
+
+**Language Difficulty Adaptation**:
+{difficulty_instructions}
+
+**Response Format** (IMPORTANT - Follow exactly):
+Your direct response (1-2 sentences only)
+
+**对话提示:**
+[One short English sentence the student could say]
+[One short Chinese sentence the student could say]
+
+**Rules**:
+- NEVER include "**LangCoach:**" or any other prefix in your actual response
+- Your response should ONLY contain the direct message content
+- Keep dialogue hints SHORT and specific (not generic)
+- Do NOT add hints to chat history - they are UI-only
+- Only provide encouragement if student strays from scenario
+- This is an unlimited conversation - continue until the user decides to end
+
+**CRITICAL ABOUT 对话提示**:
+- The "对话提示" section provides examples of what the STUDENT should say next
+- DO NOT put what YOU (the {ai_role}) would say next in the 对话提示
+- Write ONLY the example sentences directly, WITHOUT any labels
+- Format: First line = English sentence, Second line = Chinese sentence
+"""
+
+DIFFICULTY_INSTRUCTIONS = {
+    "easy": """- Use simple, basic vocabulary suitable for beginners or children
+- Speak slowly and clearly
+- Use short, simple sentences
+- Avoid idioms and complex grammar
+- Be patient and encouraging""",
+    "medium": """- Use everyday vocabulary
+- Speak at a normal pace
+- Use moderately complex sentences
+- Include some common expressions and idioms
+- Provide helpful corrections when needed""",
+    "hard": """- Use advanced and specialized vocabulary
+- Speak at a natural, faster pace
+- Use complex sentence structures
+- Include professional terminology and idioms
+- Challenge the learner with nuanced language"""
+}
+
+
+@app.post("/api/custom-scenario/extract", response_model=CustomScenarioExtractResponse)
+async def extract_custom_scenario(request: CustomScenarioExtractRequest):
+    """从用户输入中提取自定义场景信息"""
+    try:
+        llm = get_llm_service()
+        if not llm:
+            raise HTTPException(status_code=503, detail="LLM service not available")
+
+        # 构建提取prompt
+        prompt = SCENARIO_EXTRACT_PROMPT.format(user_input=request.user_input)
+
+        logger.info(f"Extracting scenario info from: {request.user_input}")
+
+        # 调用LLM
+        response = llm.invoke(prompt)
+        raw_response = response.content.strip()
+
+        logger.info(f"LLM response: {raw_response[:500]}...")
+
+        # 解析JSON响应
+        import json
+        import re
+
+        # 尝试提取JSON部分
+        json_match = re.search(r'\{[\s\S]*\}', raw_response)
+        if json_match:
+            json_str = json_match.group()
+            scenario_info = json.loads(json_str)
+        else:
+            raise ValueError("No valid JSON found in response")
+
+        # 确保所有字段都存在，提供默认值
+        defaults = {
+            "ai_role": "conversation partner",
+            "ai_role_cn": "对话伙伴",
+            "user_role": "English learner",
+            "user_role_cn": "英语学习者",
+            "goal": "Practice English conversation",
+            "goal_cn": "练习英语对话",
+            "challenge": "Maintain natural conversation flow",
+            "challenge_cn": "保持自然的对话流程",
+            "greeting": "Hello! How can I help you today?",
+            "difficulty_level": "medium",
+            "speaking_speed": "medium",
+            "vocabulary": "medium",
+            "scenario_summary": request.user_input,
+            "scenario_summary_cn": request.user_input
+        }
+
+        for key, default_value in defaults.items():
+            if key not in scenario_info or not scenario_info[key]:
+                scenario_info[key] = default_value
+
+        return CustomScenarioExtractResponse(**scenario_info)
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {e}")
+        # 返回基于用户输入的默认响应
+        return CustomScenarioExtractResponse(
+            ai_role="conversation partner",
+            ai_role_cn="对话伙伴",
+            user_role="English learner",
+            user_role_cn="英语学习者",
+            goal="Practice English conversation based on: " + request.user_input,
+            goal_cn="基于以下场景练习英语对话：" + request.user_input,
+            challenge="Communicate effectively in this scenario",
+            challenge_cn="在此场景中有效沟通",
+            greeting="Hello! I'm ready to help you practice. What would you like to talk about?",
+            difficulty_level="medium",
+            speaking_speed="medium",
+            vocabulary="medium",
+            scenario_summary=request.user_input,
+            scenario_summary_cn=request.user_input
+        )
+    except Exception as e:
+        logger.error(f"Error extracting scenario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/custom-scenario/generate", response_model=CustomScenarioGenerateResponse)
+async def generate_custom_scenario_prompt(request: CustomScenarioGenerateRequest):
+    """生成自定义场景的prompt"""
+    try:
+        scenario_info = request.scenario_info
+
+        # 生成唯一的场景ID
+        scenario_id = f"custom_{uuid.uuid4().hex[:8]}"
+
+        # 获取难度说明
+        difficulty_instructions = DIFFICULTY_INSTRUCTIONS.get(
+            scenario_info.difficulty_level,
+            DIFFICULTY_INSTRUCTIONS["medium"]
+        )
+
+        # 生成prompt内容
+        prompt_content = SCENARIO_PROMPT_TEMPLATE.format(
+            scenario_summary=scenario_info.scenario_summary,
+            ai_role=scenario_info.ai_role,
+            user_role=scenario_info.user_role,
+            difficulty_level=scenario_info.difficulty_level,
+            speaking_speed=scenario_info.speaking_speed,
+            vocabulary=scenario_info.vocabulary,
+            difficulty_instructions=difficulty_instructions
+        )
+
+        # 存储到临时缓存
+        _custom_scenario_prompts[scenario_id] = prompt_content
+
+        logger.info(f"Generated custom scenario prompt: {scenario_id}")
+
+        # 生成开场白音频
+        audio_url = await generate_audio_url(
+            scenario_info.greeting,
+            speaker=config.service.tts_default_speaker,
+            fast_mode=True
+        )
+
+        return CustomScenarioGenerateResponse(
+            scenario_id=scenario_id,
+            prompt_content=prompt_content,
+            greeting=scenario_info.greeting,
+            audio_url=audio_url
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating scenario prompt: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================

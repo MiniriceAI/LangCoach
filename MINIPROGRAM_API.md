@@ -22,6 +22,7 @@
 │                   (LangCoach-MiniProgram)                       │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
 │  │   Home Tab  │  │  Chat Tab   │  │ Profile Tab │             │
+│  │ (自定义场景)│  │ (对话练习)  │  │             │             │
 │  └─────────────┘  └─────────────┘  └─────────────┘             │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ HTTPS
@@ -32,24 +33,26 @@
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │                      FastAPI App                          │  │
 │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐            │  │
-│  │  │ Chat API   │ │ Speech API │ │ Dict API   │            │  │
-│  │  │ /api/chat/*│ │/api/trans* │ │/api/dict*  │            │  │
-│  │  └─────┬──────┘ └─────┬──────┘ └────────────┘            │  │
-│  │        │              │                                   │  │
-│  │        ▼              ▼                                   │  │
-│  │  ┌────────────┐ ┌────────────────────────────┐           │  │
-│  │  │  Session   │ │      Speech Services       │           │  │
-│  │  │  Manager   │ │  STT: Whisper-large-v3     │           │  │
-│  │  │            │ │  TTS: Edge-TTS (Azure)     │           │  │
-│  │  └─────┬──────┘ └────────────────────────────┘           │  │
+│  │  │ Chat API   │ │ Custom     │ │ Speech API │            │  │
+│  │  │ /api/chat/*│ │ Scenario   │ │/api/trans* │            │  │
+│  │  │            │ │ /api/      │ │/api/synth* │            │  │
+│  │  │            │ │ custom-*   │ │            │            │  │
+│  │  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘            │  │
+│  │        │              │              │                    │  │
+│  │        ▼              ▼              ▼                    │  │
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────────────┐    │  │
+│  │  │  Session   │ │  Custom    │ │   Speech Services  │    │  │
+│  │  │  Manager   │ │  Prompt    │ │  STT: Whisper      │    │  │
+│  │  │            │ │  Cache     │ │  TTS: Edge-TTS     │    │  │
+│  │  └─────┬──────┘ └────────────┘ └────────────────────┘    │  │
 │  └────────┼──────────────────────────────────────────────────┘  │
 │           │                                                      │
 │           ▼                                                      │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │              LLM Agent Layer                              │  │
 │  │  ┌────────────────┐  ┌────────────────┐                  │  │
-│  │  │ ScenarioAgent  │  │  VocabAgent    │                  │  │
-│  │  │ (job_interview │  │  (vocabulary)  │                  │  │
+│  │  │ ScenarioAgent  │  │ CustomScenario │                  │  │
+│  │  │ (job_interview │  │ (动态生成)     │                  │  │
 │  │  │  hotel_checkin │  │                │                  │  │
 │  │  │  renting, etc) │  │                │                  │  │
 │  │  └───────┬────────┘  └────────────────┘                  │  │
@@ -147,6 +150,13 @@ curl http://localhost:8600/api/scenarios
 | `/api/chat/message` | POST | 发送消息并获取 AI 回复 |
 | `/api/chat/rate` | POST | 评价会话 |
 | `/api/chat/feedback` | POST | 消息反馈（点赞/踩） |
+
+### 自定义场景接口 (新增)
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/custom-scenario/extract` | POST | 从用户输入提取场景信息 |
+| `/api/custom-scenario/generate` | POST | 生成自定义场景的 prompt |
 
 ### 语音接口
 
@@ -404,6 +414,130 @@ curl http://localhost:8600/api/scenarios
 
 ---
 
+### 10. 自定义场景 - 提取场景信息
+
+**POST** `/api/custom-scenario/extract`
+
+从用户输入的场景描述中提取关键信息，包括角色、目标、挑战、难度等。
+
+**请求体:**
+```json
+{
+  "user_input": "小学三年级学生，去超市买文具"
+}
+```
+
+**响应示例:**
+```json
+{
+  "ai_role": "supermarket cashier",
+  "ai_role_cn": "超市收银员",
+  "user_role": "third-grade primary school student",
+  "user_role_cn": "小学三年级学生",
+  "goal": "Successfully purchase stationery items at the supermarket",
+  "goal_cn": "成功在超市购买文具",
+  "challenge": "Communicate clearly about what items you need and handle the payment process",
+  "challenge_cn": "清楚地表达需要什么物品并完成付款流程",
+  "greeting": "Hello there! Welcome to our store. What can I help you find today?",
+  "difficulty_level": "easy",
+  "speaking_speed": "slow",
+  "vocabulary": "simple",
+  "scenario_summary": "A third-grade student buying stationery at a supermarket",
+  "scenario_summary_cn": "小学三年级学生在超市买文具"
+}
+```
+
+**响应字段说明:**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ai_role` | string | AI 扮演的角色（英文） |
+| `ai_role_cn` | string | AI 扮演的角色（中文） |
+| `user_role` | string | 用户扮演的角色（英文） |
+| `user_role_cn` | string | 用户扮演的角色（中文） |
+| `goal` | string | 对话目标（英文） |
+| `goal_cn` | string | 对话目标（中文） |
+| `challenge` | string | 挑战描述（英文） |
+| `challenge_cn` | string | 挑战描述（中文） |
+| `greeting` | string | AI 的开场白 |
+| `difficulty_level` | string | 难度级别: easy, medium, hard |
+| `speaking_speed` | string | 语速: slow, medium, fast |
+| `vocabulary` | string | 词汇难度: simple, medium, advanced |
+| `scenario_summary` | string | 场景摘要（英文） |
+| `scenario_summary_cn` | string | 场景摘要（中文） |
+
+---
+
+### 11. 自定义场景 - 生成场景 Prompt
+
+**POST** `/api/custom-scenario/generate`
+
+根据提取的场景信息生成对话 prompt，并返回场景 ID 和开场白音频。
+
+**请求体:**
+```json
+{
+  "scenario_info": {
+    "ai_role": "supermarket cashier",
+    "ai_role_cn": "超市收银员",
+    "user_role": "third-grade primary school student",
+    "user_role_cn": "小学三年级学生",
+    "goal": "Successfully purchase stationery items",
+    "goal_cn": "成功购买文具",
+    "challenge": "Communicate clearly about items needed",
+    "challenge_cn": "清楚表达需要的物品",
+    "greeting": "Hello! What can I help you find today?",
+    "difficulty_level": "easy",
+    "speaking_speed": "slow",
+    "vocabulary": "simple",
+    "scenario_summary": "Student buying stationery",
+    "scenario_summary_cn": "学生买文具"
+  },
+  "user_input": "小学三年级学生，去超市买文具"
+}
+```
+
+**响应示例:**
+```json
+{
+  "scenario_id": "custom_a1b2c3d4",
+  "prompt_content": "**System Prompt: Custom Scenario...**",
+  "greeting": "Hello! What can I help you find today?",
+  "audio_url": "/api/audio/550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**响应字段说明:**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `scenario_id` | string | 生成的场景 ID（以 `custom_` 开头） |
+| `prompt_content` | string | 生成的完整 prompt 内容 |
+| `greeting` | string | 开场白文本 |
+| `audio_url` | string | 开场白音频 URL（可选） |
+
+---
+
+### 使用自定义场景开始对话
+
+生成场景后，使用 `/api/chat/start` 开始对话：
+
+**请求体:**
+```json
+{
+  "scenario": {
+    "scenario": "custom_a1b2c3d4",
+    "greeting": "Hello! What can I help you find today?"
+  },
+  "level": "A1",
+  "turns": 9999
+}
+```
+
+**注意:** 自定义场景的 `turns` 设置为 9999 表示无限对话，用户可以随时退出。
+
+---
+
 ## 小程序端配置
 
 ### API 配置文件
@@ -468,6 +602,7 @@ const audio = await api.speech.synthesize('Hello!', 'Ceylia', true);
 | `hotel_checkin` | 酒店入住 | 酒店前台对话练习 |
 | `renting` | 租房咨询 | 租房看房对话练习 |
 | `salary_negotiation` | 薪资谈判 | 薪资协商对话练习 |
+| `custom_*` | 自定义场景 | 用户自定义的场景（ID 以 `custom_` 开头） |
 
 ---
 
@@ -575,6 +710,17 @@ LangCoach-MiniProgram/
 ---
 
 ## 更新日志
+
+### v1.1.0 (2026-01-25)
+
+- 新增自定义场景功能
+  - `/api/custom-scenario/extract` - 从用户输入提取场景信息
+  - `/api/custom-scenario/generate` - 生成自定义场景 prompt
+- 自定义场景支持：
+  - 智能角色提取（AI 角色、用户角色）
+  - 自动难度调整（根据场景内容）
+  - 无限对话轮数
+  - 动态 prompt 生成
 
 ### v1.0.0 (2024-01-21)
 

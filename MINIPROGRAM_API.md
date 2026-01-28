@@ -169,7 +169,7 @@ curl http://localhost:8600/api/scenarios
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/dictionary` | GET | 词典查询 |
+
 | `/api/auth/wechat` | POST | 微信登录 |
 
 ---
@@ -285,7 +285,6 @@ curl http://localhost:8600/api/scenarios
   "current_turn": 20,
   "report": {
     "grammarScore": 85,
-    "vocabularyScore": 78,
     "fluencyScore": 82,
     "totalTurns": 20,
     "tips": [

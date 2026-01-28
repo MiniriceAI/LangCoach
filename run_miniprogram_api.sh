@@ -11,7 +11,6 @@
 # - 对话管理 (/api/chat/*)
 # - 语音识别 (/api/transcribe)
 # - 语音合成 (/api/synthesize)
-# - 词典查询 (/api/dictionary)
 # - 用户认证 (/api/auth/*)
 #
 # Usage:
@@ -62,7 +61,6 @@ echo "    Chat Start: POST /api/chat/start"
 echo "    Chat Msg:   POST /api/chat/message"
 echo "    Transcribe: POST /api/transcribe"
 echo "    Synthesize: POST /api/synthesize"
-echo "    Dictionary: GET  /api/dictionary?word=xxx"
 echo "=========================================="
 
 # Set environment variables

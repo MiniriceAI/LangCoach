@@ -1,22 +1,31 @@
 import json
+import os
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # 导入提示模板相关类
-from langchain_core.messages import HumanMessage  # 导入消息类
+from langchain_core.messages import HumanMessage, SystemMessage  # 导入消息类
 from langchain_core.runnables.history import RunnableWithMessageHistory  # 导入带有消息历史的可运行类
 
 from .session_history import get_session_history  # 导入会话历史相关方法
-from .llm_factory import create_llm  # 导入 LLM 工厂函数
+from .llm_factory import create_llm, get_current_provider_info  # 导入 LLM 工厂函数
 from .conversation_config import ConversationConfig, get_default_config
 from utils.logger import LOG  # 导入日志工具
+
+# 延迟导入长期记忆模块（可选依赖）
+try:
+    from .long_term_memory import get_memory_instance
+    MEMORY_AVAILABLE = True
+except ImportError:
+    MEMORY_AVAILABLE = False
+    LOG.warning("[AgentBase] 长期记忆模块不可用（Milvus 未配置）")
 
 
 class AgentBase(ABC):
     """
     抽象基类，提供代理的共有功能。
-    支持 Jinja2 模板和会话配置。
+    支持 Jinja2 模板、会话配置和长期记忆（Phase 2 新增）。
     """
     def __init__(
         self,
@@ -25,7 +34,9 @@ class AgentBase(ABC):
         intro_file=None,
         session_id=None,
         config: Optional[ConversationConfig] = None,
-        template_dir: str = "prompts/templates"
+        template_dir: str = "prompts/templates",
+        enable_long_term_memory: bool = None,
+        user_id: str = "default_user",
     ):
         self.name = name
         self.prompt_file = prompt_file
@@ -33,6 +44,30 @@ class AgentBase(ABC):
         self.session_id = session_id if session_id else self.name
         self.template_dir = template_dir
         self._config = config if config else get_default_config()
+        self.user_id = user_id
+
+        # 长期记忆配置（Phase 2）
+        # 默认：如果 MILVUS_HOST 配置了，且模块可用，则启用
+        if enable_long_term_memory is None:
+            enable_long_term_memory = (
+                MEMORY_AVAILABLE and
+                os.getenv("MILVUS_HOST") is not None
+            )
+
+        self.enable_long_term_memory = enable_long_term_memory
+        self.memory = None
+
+        if self.enable_long_term_memory:
+            if MEMORY_AVAILABLE:
+                try:
+                    self.memory = get_memory_instance()
+                    LOG.info(f"[{self.name}] 长期记忆已启用")
+                except Exception as e:
+                    LOG.error(f"[{self.name}] 初始化长期记忆失败: {e}")
+                    self.enable_long_term_memory = False
+            else:
+                LOG.warning(f"[{self.name}] 长期记忆模块不可用，已禁用")
+                self.enable_long_term_memory = False
 
         # 初始化 Jinja2 环境
         self._jinja_env = Environment(
@@ -95,6 +130,39 @@ class AgentBase(ABC):
         except json.JSONDecodeError:
             raise ValueError(f"初始消息文件 {self.intro_file} 包含无效的 JSON!")
 
+    def _retrieve_relevant_memories(self, user_input: str) -> str:
+        """
+        从 Milvus 检索相关的历史记忆（Phase 2）
+
+        参数:
+            user_input: 用户输入
+
+        返回:
+            str: 格式化的记忆文本
+        """
+        if not self.enable_long_term_memory or not self.memory:
+            return ""
+
+        try:
+            # 检索相关记忆
+            memories = self.memory.retrieve_relevant_memories(
+                user_id=self.user_id,
+                query=user_input,
+                scenario=self.name,
+                top_k=3,
+                check_context_limit=True,
+            )
+
+            if memories:
+                formatted = self.memory.format_memories_for_prompt(memories)
+                LOG.debug(f"[{self.name}] 注入 {len(memories)} 条历史记忆到对话上下文")
+                return formatted
+
+        except Exception as e:
+            LOG.error(f"[{self.name}] 检索记忆失败: {e}")
+
+        return ""
+
     def create_chatbot(self):
         """
         初始化聊天机器人，包括系统提示和消息历史记录。
@@ -108,6 +176,13 @@ class AgentBase(ABC):
         # 根据环境变量选择合适的 LLM 提供者
         llm = create_llm()
 
+        # 保存当前 LLM 提供者信息
+        self._llm_provider_info = get_current_provider_info()
+        LOG.info(
+            f"[{self.name}] LLM 初始化: provider={self._llm_provider_info.get('provider')}, "
+            f"model={self._llm_provider_info.get('model')}"
+        )
+
         # 组合提示模板和 LLM
         self.chatbot = system_prompt | llm
 
@@ -117,6 +192,7 @@ class AgentBase(ABC):
     def chat_with_history(self, user_input, session_id=None):
         """
         处理用户输入，生成包含聊天历史的回复。
+        Phase 2 增强：集成长期记忆检索。
 
         参数:
             user_input (str): 用户输入的消息
@@ -128,10 +204,78 @@ class AgentBase(ABC):
         if session_id is None:
             session_id = self.session_id
 
+        # 记录每次聊天使用的 LLM 信息
+        provider_info = getattr(self, '_llm_provider_info', {})
+        LOG.info(
+            f"[Chat][{self.name}] 使用 LLM: provider={provider_info.get('provider')}, "
+            f"model={provider_info.get('model')}, session={session_id}"
+        )
+
+        # Phase 2: 检索相关的历史记忆
+        memory_context = self._retrieve_relevant_memories(user_input)
+
+        # 如果有记忆上下文，将其作为系统消息注入
+        messages = []
+        if memory_context:
+            messages.append(SystemMessage(content=memory_context))
+
+        messages.append(HumanMessage(content=user_input))
+
         response = self.chatbot_with_history.invoke(
-            [HumanMessage(content=user_input)],  # 将用户输入封装为 HumanMessage
+            messages,  # 传入消息列表（可能包含记忆上下文）
             {"configurable": {"session_id": session_id}},  # 传入配置，包括会话ID
         )
 
         LOG.debug(f"[ChatBot][{self.name}] {response.content}")  # 记录调试日志
         return response.content  # 返回生成的回复内容
+
+    def save_conversation_summary(
+        self,
+        summary: str,
+        session_id: str = None,
+        metadata: dict = None
+    ) -> bool:
+        """
+        保存对话摘要到长期记忆（Phase 2）
+
+        参数:
+            summary: 对话摘要文本
+            session_id: 会话 ID
+            metadata: 额外的元数据
+
+        返回:
+            bool: 是否保存成功
+        """
+        if not self.enable_long_term_memory or not self.memory:
+            LOG.debug(f"[{self.name}] 长期记忆未启用，跳过保存")
+            return False
+
+        if session_id is None:
+            session_id = self.session_id
+
+        try:
+            # 添加配置信息到元数据
+            if metadata is None:
+                metadata = {}
+
+            metadata.update({
+                "difficulty": self.config.difficulty.value,
+                "turns": self.config.turns,
+            })
+
+            success = self.memory.store_conversation_summary(
+                user_id=self.user_id,
+                session_id=session_id,
+                scenario=self.name,
+                summary=summary,
+                metadata=metadata,
+            )
+
+            if success:
+                LOG.info(f"[{self.name}] 对话摘要已保存到长期记忆")
+
+            return success
+
+        except Exception as e:
+            LOG.error(f"[{self.name}] 保存对话摘要失败: {e}")
+            return False

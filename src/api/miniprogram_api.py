@@ -406,6 +406,7 @@ class ChatStartRequest(BaseModel):
     scenario: Optional[Dict[str, Any]] = None
     level: str = "B1"
     turns: int = 20
+    speaker: Optional[str] = None  # TTS voice role
 
 
 class ChatTips(BaseModel):
@@ -429,6 +430,7 @@ class ChatMessageRequest(BaseModel):
     """发送消息请求"""
     session_id: str
     message: str
+    speaker: Optional[str] = None  # TTS voice role
 
 
 class ChatMessageResponse(BaseModel):
@@ -874,10 +876,14 @@ async def chat_start(request: ChatStartRequest):
         # 保存语速到会话中，供后续消息使用
         session["speaking_speed"] = speaking_speed
 
-        # 生成开场白音频URL（带语速控制）
+        # 保存语音角色到会话中，供后续消息使用
+        speaker = request.speaker or config.service.tts_default_speaker
+        session["speaker"] = speaker
+
+        # 生成开场白音频URL（带语速控制和语音角色）
         audio_url = await generate_audio_url(
             greeting,
-            speaker=config.service.tts_default_speaker,
+            speaker=speaker,
             fast_mode=True,
             speaking_speed=speaking_speed
         )
@@ -990,11 +996,16 @@ Assistant:"""
             "timestamp": datetime.now().isoformat()
         })
 
-        # 生成音频URL (只对直接回复生成TTS，使用会话中保存的语速)
+        # 生成音频URL (只对直接回复生成TTS，使用会话中保存的语速和语音角色)
         speaking_speed = session.get("speaking_speed", "medium")
+        # 优先使用请求中的speaker，其次使用会话中的speaker，最后使用默认speaker
+        speaker = request.speaker or session.get("speaker") or config.service.tts_default_speaker
+        # 更新会话中的speaker（如果请求中提供了新的speaker）
+        if request.speaker:
+            session["speaker"] = request.speaker
         audio_url = await generate_audio_url(
             reply,
-            speaker=config.service.tts_default_speaker,
+            speaker=speaker,
             fast_mode=True,
             speaking_speed=speaking_speed
         )

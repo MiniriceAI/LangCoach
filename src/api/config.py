@@ -39,8 +39,14 @@ class ServiceConfig:
     
     # Edge-TTS Configuration
     edge_tts_voices: Dict[str, str] = field(default_factory=lambda: {
-        "Ceylia": "en-US-JennyNeural",
-        "Tifa": "en-US-AriaNeural", 
+        "Ceylia": "en-US-JennyNeural",      # 美式女声 - 友好
+        "Tifa": "en-US-AriaNeural",         # 美式女声 - 自然
+        "David": "en-US-GuyNeural",         # 美式男声 - 温和
+        "Tony": "en-US-TonyNeural",         # 美式男声 - 成熟
+        "Emma": "en-GB-SoniaNeural",        # 英式女声 - 优雅
+        "Ryan": "en-GB-RyanNeural",         # 英式男声 - 正式
+        "Sarah": "en-AU-NatashaNeural",     # 澳式女声 - 活泼
+        "William": "en-AU-WilliamNeural",   # 澳式男声 - 友好
         "default": "en-US-JennyNeural"
     })
     

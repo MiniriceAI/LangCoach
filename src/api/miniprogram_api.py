@@ -179,6 +179,38 @@ def get_agent(scenario: str):
 
 
 # ============================================================
+# Prompt Loading Functions
+# ============================================================
+
+def load_prompt_file(filename: str) -> str:
+    """Load a prompt file from the prompts directory."""
+    prompt_path = os.path.join(config.paths.prompts_dir, filename)
+    try:
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"Failed to load prompt file {filename}: {e}")
+        raise
+
+
+def load_difficulty_instructions() -> Dict[str, str]:
+    """Load difficulty instructions from JSON file."""
+    import json
+    instructions_path = os.path.join(config.paths.prompts_dir, "difficulty_instructions.json")
+    try:
+        with open(instructions_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load difficulty instructions: {e}")
+        # Fallback to defaults
+        return {
+            "easy": "Use simple vocabulary and short sentences",
+            "medium": "Use everyday vocabulary and moderate complexity",
+            "hard": "Use advanced vocabulary and complex structures"
+        }
+
+
+# ============================================================
 # Audio File Management
 # ============================================================
 
@@ -1014,98 +1046,34 @@ async def _synthesize_local(text: str, speaker: str) -> JSONResponse:
 # Custom Scenario Endpoints
 # ============================================================
 
-SCENARIO_EXTRACT_PROMPT = """You are an expert at analyzing language learning scenarios. Given a user's description of a custom conversation scenario, extract the following information in JSON format.
+# Load prompts from configuration files
+_SCENARIO_EXTRACT_PROMPT = None
+_SCENARIO_PROMPT_TEMPLATE = None
+_DIFFICULTY_INSTRUCTIONS = None
 
-User's scenario description: "{user_input}"
 
-Please analyze this scenario and extract:
-1. ai_role: The role AI should play (e.g., "supermarket cashier", "hotel receptionist")
-2. ai_role_cn: Chinese translation of AI role
-3. user_role: The role the user will play (e.g., "third-grade student", "tourist")
-4. user_role_cn: Chinese translation of user role
-5. goal: The main goal of the conversation in English
-6. goal_cn: Chinese translation of the goal
-7. challenge: What makes this conversation challenging for the learner
-8. challenge_cn: Chinese translation of the challenge
-9. greeting: A natural opening line from the AI character (in English, 1-2 sentences)
-10. difficulty_level: Based on the scenario, determine difficulty - "easy" (for children/beginners), "medium" (everyday situations), "hard" (professional/complex)
-11. speaking_speed: Recommended speaking speed - "slow" (for beginners/children), "medium" (normal), "fast" (advanced)
-12. vocabulary: Vocabulary complexity - "simple" (basic words), "medium" (everyday vocabulary), "advanced" (specialized terms)
-13. scenario_summary: A brief English summary of the scenario (1-2 sentences)
-14. scenario_summary_cn: Chinese translation of the summary
+def get_scenario_extract_prompt() -> str:
+    """Lazy load scenario extraction prompt."""
+    global _SCENARIO_EXTRACT_PROMPT
+    if _SCENARIO_EXTRACT_PROMPT is None:
+        _SCENARIO_EXTRACT_PROMPT = load_prompt_file("custom_scenario_extract_prompt.txt")
+    return _SCENARIO_EXTRACT_PROMPT
 
-Important rules:
-- If the user mentions children, students, or beginners, set difficulty_level to "easy", speaking_speed to "slow", vocabulary to "simple"
-- If the scenario involves professional settings (business, medical, legal), set difficulty_level to "hard"
-- The greeting should be natural and in-character for the AI role
-- All fields must be filled with reasonable defaults if not explicitly mentioned
 
-Respond ONLY with valid JSON, no other text:
-"""
+def get_scenario_prompt_template() -> str:
+    """Lazy load scenario prompt template."""
+    global _SCENARIO_PROMPT_TEMPLATE
+    if _SCENARIO_PROMPT_TEMPLATE is None:
+        _SCENARIO_PROMPT_TEMPLATE = load_prompt_file("custom_scenario_template.txt")
+    return _SCENARIO_PROMPT_TEMPLATE
 
-SCENARIO_PROMPT_TEMPLATE = """**System Prompt: Custom Scenario - {scenario_summary}**
 
-**Role**:
-You are a {ai_role}. The user is playing the role of a {user_role}.
-
-**Scenario Context**:
-{scenario_summary}
-
-**Task**:
-- Conduct a realistic conversation in this scenario
-- Help the user practice English through natural dialogue
-- Keep responses SHORT (1-2 sentences max) and natural
-- Always respond in English, even if user speaks Chinese
-- Provide dialogue hints to guide the student's next response
-
-**Difficulty Settings**:
-- Level: {difficulty_level}
-- Speaking Speed: {speaking_speed}
-- Vocabulary: {vocabulary}
-
-**Language Difficulty Adaptation**:
-{difficulty_instructions}
-
-**Response Format** (CRITICAL - You MUST respond in valid JSON format):
-{{
-  "direct_response": "Your direct response to the user (1-2 sentences only, in English)",
-  "hints_english": "One short English sentence the student could say next",
-  "hints_chinese": "One short Chinese sentence the student could say next (translation of hints_english)"
-}}
-
-**Important Rules**:
-1. You MUST respond with ONLY valid JSON - no other text before or after
-2. The "direct_response" is what YOU (the {ai_role}) say to the user
-3. The "hints_english" and "hints_chinese" are examples of what the STUDENT could say next
-4. Keep all responses SHORT and conversational
-5. Do NOT include any markdown formatting, code blocks, or explanations
-6. This is an unlimited conversation - continue until the user decides to end
-
-**Example Response**:
-{{
-  "direct_response": "Welcome! How can I help you today?",
-  "hints_english": "I'm looking for a place to rent.",
-  "hints_chinese": "我在找房子租。"
-}}
-"""
-
-DIFFICULTY_INSTRUCTIONS = {
-    "easy": """- Use simple, basic vocabulary suitable for beginners or children
-- Speak slowly and clearly
-- Use short, simple sentences
-- Avoid idioms and complex grammar
-- Be patient and encouraging""",
-    "medium": """- Use everyday vocabulary
-- Speak at a normal pace
-- Use moderately complex sentences
-- Include some common expressions and idioms
-- Provide helpful corrections when needed""",
-    "hard": """- Use advanced and specialized vocabulary
-- Speak at a natural, faster pace
-- Use complex sentence structures
-- Include professional terminology and idioms
-- Challenge the learner with nuanced language"""
-}
+def get_difficulty_instructions() -> Dict[str, str]:
+    """Lazy load difficulty instructions."""
+    global _DIFFICULTY_INSTRUCTIONS
+    if _DIFFICULTY_INSTRUCTIONS is None:
+        _DIFFICULTY_INSTRUCTIONS = load_difficulty_instructions()
+    return _DIFFICULTY_INSTRUCTIONS
 
 
 @app.post("/api/custom-scenario/extract", response_model=CustomScenarioExtractResponse)
@@ -1117,7 +1085,8 @@ async def extract_custom_scenario(request: CustomScenarioExtractRequest):
             raise HTTPException(status_code=503, detail="LLM service not available")
 
         # 构建提取prompt
-        prompt = SCENARIO_EXTRACT_PROMPT.format(user_input=request.user_input)
+        prompt_template = get_scenario_extract_prompt()
+        prompt = prompt_template.format(user_input=request.user_input)
 
         logger.info(f"Extracting scenario info from: {request.user_input}")
 
@@ -1197,13 +1166,15 @@ async def generate_custom_scenario_prompt(request: CustomScenarioGenerateRequest
         scenario_id = f"custom_{uuid.uuid4().hex[:8]}"
 
         # 获取难度说明
-        difficulty_instructions = DIFFICULTY_INSTRUCTIONS.get(
+        difficulty_instructions_map = get_difficulty_instructions()
+        difficulty_instructions = difficulty_instructions_map.get(
             scenario_info.difficulty_level,
-            DIFFICULTY_INSTRUCTIONS["medium"]
+            difficulty_instructions_map["medium"]
         )
 
         # 生成prompt内容
-        prompt_content = SCENARIO_PROMPT_TEMPLATE.format(
+        prompt_template = get_scenario_prompt_template()
+        prompt_content = prompt_template.format(
             scenario_summary=scenario_info.scenario_summary,
             ai_role=scenario_info.ai_role,
             user_role=scenario_info.user_role,

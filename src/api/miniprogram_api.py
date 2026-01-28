@@ -21,6 +21,7 @@ import uuid
 import logging
 import tempfile
 import base64
+import json
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -141,30 +142,97 @@ def get_scenario_context(scenario: str, difficulty: str) -> str:
 
 
 def get_llm_service():
-    """获取LLM服务实例"""
+    """获取LLM服务实例，根据LLM_PROVIDER配置选择提供商"""
     global _llm_service
     if _llm_service is None:
         try:
-            import requests
-            # 测试Ollama连接
-            response = requests.get(config.get_ollama_url("api/tags"), timeout=config.service.ollama_timeout)
-            if response.status_code == 200:
-                from langchain_ollama import ChatOllama
-                _llm_service = ChatOllama(
-                    model=config.service.ollama_model,
-                    base_url=config.service.ollama_base_url,
-                    temperature=config.service.ollama_temperature,
-                    num_predict=config.service.ollama_num_predict,
-                    stop=config.service.ollama_stop_tokens
-                )
-                _service_status["llm"]["status"] = "loaded"
-                logger.info("LLM service (Ollama + GLM-4-9B) loaded successfully")
+            import os
+            
+            # 读取LLM提供商配置
+            llm_provider = os.getenv("LLM_PROVIDER", "deepseek").lower()
+            
+            if llm_provider == "deepseek":
+                # 从环境变量或.env文件获取API密钥
+                api_key = os.getenv("DEEPSEEK_API_KEY")
+                if api_key:
+                    from langchain_openai import ChatOpenAI
+                    _llm_service = ChatOpenAI(
+                        model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+                        openai_api_base=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+                        openai_api_key=api_key,
+                        max_tokens=int(os.getenv("DEEPSEEK_MAX_TOKENS", "8192")),
+                        temperature=float(os.getenv("DEEPSEEK_TEMPERATURE", "0.8")),
+                    )
+                    _service_status["llm"]["status"] = "loaded"
+                    _service_status["llm"]["provider"] = "DeepSeek"
+                    _service_status["llm"]["model"] = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+                    logger.info(f"LLM service loaded successfully - Provider: DeepSeek")
+                else:
+                    logger.error("DEEPSEEK_API_KEY not found in environment variables or .env file")
+                    _service_status["llm"]["status"] = "error"
+                    _service_status["llm"]["provider"] = "Error"
+                    _service_status["llm"]["model"] = "API key missing"
+            
+            elif llm_provider == "openai":
+                # 从环境变量或.env文件获取API密钥
+                api_key = os.getenv("OPENAI_API_KEY")
+                if api_key:
+                    from langchain_openai import ChatOpenAI
+                    _llm_service = ChatOpenAI(
+                        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                        openai_api_key=api_key,
+                        max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "8192")),
+                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.8")),
+                    )
+                    _service_status["llm"]["status"] = "loaded"
+                    _service_status["llm"]["provider"] = "OpenAI"
+                    _service_status["llm"]["model"] = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                    logger.info(f"LLM service loaded successfully - Provider: OpenAI")
+                else:
+                    logger.error("OPENAI_API_KEY not found in environment variables or .env file")
+                    _service_status["llm"]["status"] = "error"
+                    _service_status["llm"]["provider"] = "Error"
+                    _service_status["llm"]["model"] = "API key missing"
+            
+            elif llm_provider == "ollama":
+                import requests
+                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                try:
+                    # 测试Ollama连接
+                    response = requests.get(f"{ollama_url}/api/tags", timeout=int(os.getenv("OLLAMA_TIMEOUT", "5")))
+                    if response.status_code == 200:
+                        from langchain_ollama import ChatOllama
+                        _llm_service = ChatOllama(
+                            model=os.getenv("OLLAMA_MODEL", "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL"),
+                            base_url=ollama_url,
+                            temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.8")),
+                            num_predict=int(os.getenv("OLLAMA_NUM_PREDICT", "512")),
+                        )
+                        _service_status["llm"]["status"] = "loaded"
+                        _service_status["llm"]["provider"] = "Ollama"
+                        _service_status["llm"]["model"] = os.getenv("OLLAMA_MODEL", "hf.co/unsloth/GLM-4-9B-0414-GGUF:Q8_K_XL")
+                        logger.info(f"LLM service loaded successfully - Provider: Ollama")
+                    else:
+                        logger.error("Ollama service unavailable")
+                        _service_status["llm"]["status"] = "error"
+                        _service_status["llm"]["provider"] = "Error"
+                        _service_status["llm"]["model"] = "Service unavailable"
+                except Exception as e:
+                    logger.error(f"Failed to connect to Ollama: {e}")
+                    _service_status["llm"]["status"] = "error"
+                    _service_status["llm"]["provider"] = "Error"
+                    _service_status["llm"]["model"] = "Connection failed"
             else:
-                logger.error("Ollama服务不可用")
+                logger.error(f"Unsupported LLM provider: {llm_provider}")
                 _service_status["llm"]["status"] = "error"
+                _service_status["llm"]["provider"] = "Error"
+                _service_status["llm"]["model"] = f"Unsupported provider: {llm_provider}"
+            
         except Exception as e:
             logger.error(f"LLM service loading failed: {e}")
             _service_status["llm"]["status"] = "error"
+            _service_status["llm"]["provider"] = "Error"
+            _service_status["llm"]["model"] = "Unknown"
     return _llm_service
 
 
@@ -184,7 +252,13 @@ def get_agent(scenario: str):
 
 def load_prompt_file(filename: str) -> str:
     """Load a prompt file from the prompts directory."""
-    prompt_path = os.path.join(config.paths.prompts_dir, filename)
+    prompts_dir = os.getenv("PROMPTS_DIR", "prompts")
+    if not os.path.isabs(prompts_dir):
+        # 相对路径，相对于项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        prompts_dir = os.path.join(project_root, prompts_dir)
+    
+    prompt_path = os.path.join(prompts_dir, filename)
     try:
         with open(prompt_path, 'r', encoding='utf-8') as f:
             return f.read()
@@ -196,7 +270,13 @@ def load_prompt_file(filename: str) -> str:
 def load_difficulty_instructions() -> Dict[str, str]:
     """Load difficulty instructions from JSON file."""
     import json
-    instructions_path = os.path.join(config.paths.prompts_dir, "difficulty_instructions.json")
+    prompts_dir = os.getenv("PROMPTS_DIR", "prompts")
+    if not os.path.isabs(prompts_dir):
+        # 相对路径，相对于项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        prompts_dir = os.path.join(project_root, prompts_dir)
+    
+    instructions_path = os.path.join(prompts_dir, "difficulty_instructions.json")
     try:
         with open(instructions_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -214,59 +294,82 @@ def load_difficulty_instructions() -> Dict[str, str]:
 # Audio File Management
 # ============================================================
 
-async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = True) -> Optional[str]:
-    """生成文本对应的音频URL"""
+async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = True, speaking_speed: str = "medium") -> Optional[str]:
+    """生成文本对应的音频URL
+
+    Args:
+        text: 要合成的文本
+        speaker: 说话人
+        fast_mode: 是否使用快速模式(Edge-TTS)
+        speaking_speed: 语速 (slow/medium/fast)
+    """
     if speaker is None:
         speaker = config.service.tts_default_speaker
     try:
         # 生成音频文件名
         audio_id = str(uuid.uuid4())
         filename = f"{audio_id}.mp3"
-        
+
         if fast_mode:
             # 使用 Edge-TTS
-            audio_data = await _generate_edge_tts_audio_async(text, speaker)
+            audio_data = await _generate_edge_tts_audio_async(text, speaker, speaking_speed)
         else:
             # 使用本地 TTS
             audio_data = _generate_local_tts_audio(text, speaker)
-        
+
         if audio_data:
             # 将音频数据保存到临时文件
             temp_dir = tempfile.gettempdir()
             file_path = os.path.join(temp_dir, filename)
-            
+
             with open(file_path, 'wb') as f:
                 f.write(audio_data)
-            
+
             # 存储到缓存
             _audio_cache[audio_id] = file_path
-            
+
             # 返回访问URL
             return f"/api/audio/{audio_id}"
-        
+
         return None
     except Exception as e:
         logger.error(f"Failed to generate audio URL: {e}")
         return None
 
 
-async def _generate_edge_tts_audio_async(text: str, speaker: str) -> Optional[bytes]:
-    """异步使用Edge-TTS生成音频数据"""
+async def _generate_edge_tts_audio_async(text: str, speaker: str, speaking_speed: str = "medium") -> Optional[bytes]:
+    """异步使用Edge-TTS生成音频数据
+
+    Args:
+        text: 要合成的文本
+        speaker: 说话人
+        speaking_speed: 语速 (slow/medium/fast)
+    """
     try:
         import edge_tts
-        
+
         voice = config.get_edge_tts_voice(speaker)
-        logger.info(f"[TTS] Edge-TTS voice: {voice}, text: {text[:30]}...")
-        
-        communicate = edge_tts.Communicate(text, voice)
+
+        # 将speaking_speed转换为Edge-TTS的rate参数
+        # Edge-TTS rate: -50% to +100% (default 0%)
+        rate_map = {
+            "slow": "-30%",    # 慢速：减少30%
+            "medium": "+0%",   # 正常速度
+            "fast": "+30%"     # 快速：增加30%
+        }
+        rate = rate_map.get(speaking_speed, "+0%")
+
+        logger.info(f"[TTS] Edge-TTS voice: {voice}, rate: {rate}, text: {text[:30]}...")
+
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
         buffer = io.BytesIO()
-        
+
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 buffer.write(chunk["data"])
-        
+
         return buffer.getvalue()
-        
+
     except Exception as e:
         logger.error(f"Edge-TTS generation failed: {e}")
         return None
@@ -306,6 +409,12 @@ class ChatStartRequest(BaseModel):
     turns: int = 20
 
 
+class ChatTips(BaseModel):
+    """对话提示"""
+    english: str = ""
+    chinese: str = ""
+
+
 class ChatStartResponse(BaseModel):
     """开始对话响应"""
     session_id: str
@@ -314,18 +423,13 @@ class ChatStartResponse(BaseModel):
     scenario: str
     level: str
     max_turns: int
+    chat_tips: Optional[ChatTips] = None  # 添加开场白的对话提示
 
 
 class ChatMessageRequest(BaseModel):
     """发送消息请求"""
     session_id: str
     message: str
-
-
-class ChatTips(BaseModel):
-    """对话提示"""
-    english: str = ""
-    chinese: str = ""
 
 
 class ChatMessageResponse(BaseModel):
@@ -389,6 +493,11 @@ class CustomScenarioGenerateResponse(BaseModel):
     prompt_content: str  # 生成的prompt内容
     greeting: str  # 开场白
     audio_url: Optional[str] = None  # 开场白音频URL
+
+
+class RandomScenarioResponse(BaseModel):
+    """随机场景生成响应（仅返回场景描述）"""
+    scenario_description: str  # 场景描述，如"小学生去参观动物园"
 
 
 # --- Speech Models ---
@@ -763,8 +872,26 @@ async def chat_start(request: ChatStartRequest):
             "timestamp": datetime.now().isoformat()
         })
 
-        # 生成开场白音频URL
-        audio_url = await generate_audio_url(greeting, speaker=config.service.tts_default_speaker, fast_mode=True)
+        # 获取语速设置（从scenario配置中获取，如果有的话）
+        speaking_speed = "medium"  # 默认值
+        if request.scenario and "scenarioInfo" in request.scenario:
+            speaking_speed = request.scenario["scenarioInfo"].get("speaking_speed", "medium")
+        elif request.scenario and "speaking_speed" in request.scenario:
+            speaking_speed = request.scenario.get("speaking_speed", "medium")
+
+        # 保存语速到会话中，供后续消息使用
+        session["speaking_speed"] = speaking_speed
+
+        # 生成开场白音频URL（带语速控制）
+        audio_url = await generate_audio_url(
+            greeting,
+            speaker=config.service.tts_default_speaker,
+            fast_mode=True,
+            speaking_speed=speaking_speed
+        )
+
+        # 生成开场白的对话提示
+        chat_tips = await generate_startup_tips(greeting, scenario, session["difficulty"])
 
         return ChatStartResponse(
             session_id=session["id"],
@@ -772,7 +899,8 @@ async def chat_start(request: ChatStartRequest):
             audio_url=audio_url,
             scenario=scenario,
             level=request.level,
-            max_turns=request.turns
+            max_turns=request.turns,
+            chat_tips=chat_tips
         )
 
     except Exception as e:
@@ -870,8 +998,14 @@ Assistant:"""
             "timestamp": datetime.now().isoformat()
         })
 
-        # 生成音频URL (只对直接回复生成TTS)
-        audio_url = await generate_audio_url(reply, speaker=config.service.tts_default_speaker, fast_mode=True)
+        # 生成音频URL (只对直接回复生成TTS，使用会话中保存的语速)
+        speaking_speed = session.get("speaking_speed", "medium")
+        audio_url = await generate_audio_url(
+            reply,
+            speaker=config.service.tts_default_speaker,
+            fast_mode=True,
+            speaking_speed=speaking_speed
+        )
 
         # 检查是否结束
         session_ended = session["current_turn"] >= session["max_turns"]
@@ -1050,6 +1184,7 @@ async def _synthesize_local(text: str, speaker: str) -> JSONResponse:
 _SCENARIO_EXTRACT_PROMPT = None
 _SCENARIO_PROMPT_TEMPLATE = None
 _DIFFICULTY_INSTRUCTIONS = None
+_RANDOM_SCENARIO_GENERATOR_PROMPT = None
 
 
 def get_scenario_extract_prompt() -> str:
@@ -1073,6 +1208,57 @@ def get_difficulty_instructions() -> Dict[str, str]:
     global _DIFFICULTY_INSTRUCTIONS
     if _DIFFICULTY_INSTRUCTIONS is None:
         _DIFFICULTY_INSTRUCTIONS = load_difficulty_instructions()
+    return _DIFFICULTY_INSTRUCTIONS
+
+
+def get_random_scenario_generator_prompt() -> str:
+    """Lazy load random scenario generator prompt."""
+    global _RANDOM_SCENARIO_GENERATOR_PROMPT
+    if _RANDOM_SCENARIO_GENERATOR_PROMPT is None:
+        _RANDOM_SCENARIO_GENERATOR_PROMPT = load_prompt_file("random_scenario_generator_prompt.txt")
+    return _RANDOM_SCENARIO_GENERATOR_PROMPT
+
+
+async def generate_startup_tips(greeting: str, scenario: str, difficulty: str) -> Optional[ChatTips]:
+    """生成开场白的对话提示"""
+    try:
+        llm = get_llm_service()
+        if not llm:
+            return None
+
+        # 加载提示生成prompt
+        prompt_template = load_prompt_file("startup_tips_generator_prompt.txt")
+        prompt = prompt_template.format(
+            scenario=scenario,
+            difficulty=difficulty,
+            greeting=greeting
+        )
+
+        logger.info(f"Generating startup tips for greeting: {greeting[:50]}...")
+
+        # 调用LLM
+        response = llm.invoke(prompt)
+        raw_response = response.content.strip()
+
+        # 解析JSON响应
+        import json
+        import re
+
+        json_match = re.search(r'\{[\s\S]*\}', raw_response)
+        if json_match:
+            json_str = json_match.group()
+            tips_data = json.loads(json_str)
+
+            return ChatTips(
+                english=tips_data.get("hints_english", ""),
+                chinese=tips_data.get("hints_chinese", "")
+            )
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error generating startup tips: {e}")
+        return None
     return _DIFFICULTY_INSTRUCTIONS
 
 
@@ -1189,11 +1375,12 @@ async def generate_custom_scenario_prompt(request: CustomScenarioGenerateRequest
 
         logger.info(f"Generated custom scenario prompt: {scenario_id}")
 
-        # 生成开场白音频
+        # 生成开场白音频（带语速控制）
         audio_url = await generate_audio_url(
             scenario_info.greeting,
             speaker=config.service.tts_default_speaker,
-            fast_mode=True
+            fast_mode=True,
+            speaking_speed=scenario_info.speaking_speed
         )
 
         return CustomScenarioGenerateResponse(
@@ -1206,6 +1393,118 @@ async def generate_custom_scenario_prompt(request: CustomScenarioGenerateRequest
     except Exception as e:
         logger.error(f"Error generating scenario prompt: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/custom-scenario/random", response_model=RandomScenarioResponse)
+async def generate_random_scenario():
+    """使用LLM或预设场景生成随机场景描述
+
+    根据配置 RANDOM_SCENARIO_MODE 决定使用哪种方式：
+    - preset (默认): 从预设的100个场景中随机选择
+    - llm: 使用LLM生成新的场景描述
+    """
+    try:
+        # 检查配置的模式
+        mode = config.content.random_scenario_mode.lower()
+
+        if mode == "llm":
+            # 使用LLM生成
+            return await _generate_random_scenario_llm()
+        else:
+            # 使用预设场景（默认）
+            return await _generate_random_scenario_preset()
+
+    except Exception as e:
+        logger.error(f"Error generating random scenario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _generate_random_scenario_preset() -> RandomScenarioResponse:
+    """从预设场景中随机选择一个"""
+    import json
+    import random
+
+    try:
+        # 加载预设场景文件
+        preset_file = os.path.join(config.content.prompts_dir, "preset_scenarios.json")
+
+        # 如果是相对路径，解析为绝对路径
+        if not os.path.isabs(preset_file):
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            preset_file = os.path.join(project_root, preset_file)
+
+        with open(preset_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # 获取场景列表
+        scenarios = data.get("scenarios", [])
+        if not scenarios:
+            raise ValueError("No scenarios found in preset file")
+
+        # 随机选择一个场景
+        selected_scenario = random.choice(scenarios)
+        scenario_description = selected_scenario["scenario_description"]
+
+        logger.info(f"Selected preset scenario: {scenario_description}")
+
+        return RandomScenarioResponse(scenario_description=scenario_description)
+
+    except FileNotFoundError:
+        logger.error(f"Preset scenarios file not found: {preset_file}")
+        # 返回默认场景
+        return RandomScenarioResponse(scenario_description="在咖啡店点餐")
+    except Exception as e:
+        logger.error(f"Error loading preset scenarios: {e}")
+        # 返回默认场景
+        return RandomScenarioResponse(scenario_description="在咖啡店点餐")
+
+
+async def _generate_random_scenario_llm() -> RandomScenarioResponse:
+    """使用LLM生成随机场景描述"""
+    try:
+        llm = get_llm_service()
+        if not llm:
+            raise HTTPException(status_code=503, detail="LLM service not available")
+
+        # 加载随机场景生成prompt
+        prompt = get_random_scenario_generator_prompt()
+
+        logger.info("Generating random scenario description using LLM...")
+
+        # 调用LLM生成随机场景描述
+        response = llm.invoke(prompt)
+        raw_response = response.content.strip()
+
+        logger.info(f"LLM random scenario response: {raw_response[:200]}...")
+
+        # 解析JSON响应
+        import json
+        import re
+
+        # 尝试提取JSON部分
+        json_match = re.search(r'\{[\s\S]*\}', raw_response)
+        if json_match:
+            json_str = json_match.group()
+            scenario_data = json.loads(json_str)
+
+            scenario_description = scenario_data.get("scenario_description", "")
+
+            if not scenario_description:
+                raise ValueError("No scenario_description found in response")
+
+            logger.info(f"Generated random scenario: {scenario_description}")
+
+            return RandomScenarioResponse(scenario_description=scenario_description)
+        else:
+            raise ValueError("No valid JSON found in response")
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {e}")
+        # 返回默认场景描述
+        return RandomScenarioResponse(scenario_description="在咖啡店点餐")
+    except Exception as e:
+        logger.error(f"Error generating LLM scenario: {e}")
+        raise
 
 
 # ============================================================

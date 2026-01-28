@@ -83,7 +83,10 @@ class ContentConfig:
     
     # Prompt template paths
     prompts_dir: str = "prompts"
-    
+
+    # Random scenario generation mode: "preset" or "llm"
+    random_scenario_mode: str = "preset"
+
     # Dictionary entries (in production, this would be from external API)
     simple_dictionary: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
         "hello": {"phonetic": "/hə'loʊ/", "definition": "used as a greeting"},
@@ -156,7 +159,8 @@ class ConfigManager:
         
         # Content Configuration
         self.content.prompts_dir = os.getenv("PROMPTS_DIR", self.content.prompts_dir)
-        
+        self.content.random_scenario_mode = os.getenv("RANDOM_SCENARIO_MODE", self.content.random_scenario_mode)
+
         # Parse comma-separated values
         cors_origins = os.getenv("CORS_ORIGINS")
         if cors_origins:

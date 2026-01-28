@@ -1,0 +1,36 @@
+You are an English language learning assistant. Given a greeting message from an AI character in a conversation scenario, generate helpful dialogue tips for the student.
+
+**Context**:
+- Scenario: {scenario}
+- Difficulty Level: {difficulty}
+- AI Greeting: "{greeting}"
+
+**Task**: Generate dialogue tips to help the student respond appropriately to the greeting.
+
+**Output Format** (respond ONLY with valid JSON):
+{{
+  "hints_english": "One short English sentence the student could say in response (appropriate for {difficulty} level)",
+  "hints_chinese": "Chinese translation of the English hint"
+}}
+
+**Guidelines**:
+- The English hint should be a natural, appropriate response to the greeting
+- Match the difficulty level: simple for beginners, more complex for advanced learners
+- Keep it conversational and practical
+- The hint should guide the student on how to continue the conversation
+
+**Examples**:
+
+For greeting: "Hello! I'm your interviewer today. Could you start by telling me a little about yourself?"
+{{
+  "hints_english": "Nice to meet you! I'm a software engineer with 5 years of experience.",
+  "hints_chinese": "很高兴见到您!我是一名有5年经验的软件工程师。"
+}}
+
+For greeting: "Good evening! Welcome to our hotel. May I have your name, please?"
+{{
+  "hints_english": "Good evening! My name is John Smith. I have a reservation.",
+  "hints_chinese": "晚上好!我叫约翰·史密斯。我有预订。"
+}}
+
+Now generate tips for the given greeting. Respond with ONLY the JSON object, no other text.

@@ -412,9 +412,16 @@ def get_session(session_id: str) -> Optional[Dict[str, Any]]:
 
 def parse_llm_response(response_text: str) -> Dict[str, Any]:
     """
-    解析LLM响应，分离直接回复和对话提示
+    解析LLM响应，支持JSON格式和旧的文本格式
 
-    LLM响应格式:
+    JSON格式:
+    {
+        "direct_response": "直接回复内容",
+        "hints_english": "英文提示",
+        "hints_chinese": "中文提示"
+    }
+
+    旧文本格式:
     [直接回复内容 - 1-2句话]
 
     **对话提示:**
@@ -431,12 +438,40 @@ def parse_llm_response(response_text: str) -> Dict[str, Any]:
     }
     """
     import re
+    import json
 
     result = {
         "direct_response": response_text.strip(),
         "chat_tips": None
     }
 
+    # 尝试解析JSON格式
+    try:
+        # 查找JSON对象
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            json_str = json_match.group()
+            parsed_json = json.loads(json_str)
+
+            # 检查是否包含必需的字段
+            if "direct_response" in parsed_json:
+                result["direct_response"] = parsed_json["direct_response"].strip()
+
+                # 提取提示信息
+                if "hints_english" in parsed_json or "hints_chinese" in parsed_json:
+                    result["chat_tips"] = {
+                        "english": parsed_json.get("hints_english", "").strip(),
+                        "chinese": parsed_json.get("hints_chinese", "").strip()
+                    }
+
+                logger.info(f"Successfully parsed JSON response")
+                return result
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse JSON response: {e}, falling back to text parsing")
+    except Exception as e:
+        logger.warning(f"Error parsing JSON: {e}, falling back to text parsing")
+
+    # 回退到旧的文本格式解析
     # 分离对话提示部分 - 查找 **对话提示:** 标记
     tips_pattern = r'\*\*对话提示[：:]\*\*\s*\n(.+?)$'
     tips_match = re.search(tips_pattern, response_text, re.DOTALL | re.IGNORECASE)
@@ -481,7 +516,7 @@ def parse_llm_response(response_text: str) -> Dict[str, Any]:
     # 移除所有行中的 **LangCoach:** 前缀（不仅仅是开头）
     # 匹配行首的 **LangCoach:** 或 **LangCoach：** (支持中英文冒号)
     direct_response = re.sub(r'^\*\*LangCoach[：:]\*\*\s*', '', direct_response, flags=re.MULTILINE)
-    
+
     # 移除可能的其他格式标记（如 **Teacher:** 等）
     direct_response = re.sub(r'^\*\*[A-Za-z]+[：:]\*\*\s*', '', direct_response, flags=re.MULTILINE)
 
@@ -1031,26 +1066,27 @@ You are a {ai_role}. The user is playing the role of a {user_role}.
 **Language Difficulty Adaptation**:
 {difficulty_instructions}
 
-**Response Format** (IMPORTANT - Follow exactly):
-Your direct response (1-2 sentences only)
+**Response Format** (CRITICAL - You MUST respond in valid JSON format):
+{{
+  "direct_response": "Your direct response to the user (1-2 sentences only, in English)",
+  "hints_english": "One short English sentence the student could say next",
+  "hints_chinese": "One short Chinese sentence the student could say next (translation of hints_english)"
+}}
 
-**对话提示:**
-[One short English sentence the student could say]
-[One short Chinese sentence the student could say]
+**Important Rules**:
+1. You MUST respond with ONLY valid JSON - no other text before or after
+2. The "direct_response" is what YOU (the {ai_role}) say to the user
+3. The "hints_english" and "hints_chinese" are examples of what the STUDENT could say next
+4. Keep all responses SHORT and conversational
+5. Do NOT include any markdown formatting, code blocks, or explanations
+6. This is an unlimited conversation - continue until the user decides to end
 
-**Rules**:
-- NEVER include "**LangCoach:**" or any other prefix in your actual response
-- Your response should ONLY contain the direct message content
-- Keep dialogue hints SHORT and specific (not generic)
-- Do NOT add hints to chat history - they are UI-only
-- Only provide encouragement if student strays from scenario
-- This is an unlimited conversation - continue until the user decides to end
-
-**CRITICAL ABOUT 对话提示**:
-- The "对话提示" section provides examples of what the STUDENT should say next
-- DO NOT put what YOU (the {ai_role}) would say next in the 对话提示
-- Write ONLY the example sentences directly, WITHOUT any labels
-- Format: First line = English sentence, Second line = Chinese sentence
+**Example Response**:
+{{
+  "direct_response": "Welcome! How can I help you today?",
+  "hints_english": "I'm looking for a place to rent.",
+  "hints_chinese": "我在找房子租。"
+}}
 """
 
 DIFFICULTY_INSTRUCTIONS = {

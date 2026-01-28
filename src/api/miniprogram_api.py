@@ -293,14 +293,15 @@ def load_difficulty_instructions() -> Dict[str, str]:
 # Audio File Management
 # ============================================================
 
-async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = True, speaking_speed: str = "medium") -> Optional[str]:
+async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = True, speaking_speed: str = "medium", speaking_rate: str = None) -> Optional[str]:
     """生成文本对应的音频URL
 
     Args:
         text: 要合成的文本
         speaker: 说话人
         fast_mode: 是否使用快速模式(Edge-TTS)
-        speaking_speed: 语速 (slow/medium/fast)
+        speaking_speed: 语速 (slow/medium/fast) - 用于向后兼容
+        speaking_rate: 精确语速控制 (如 "-30%", "+0%", "+50%") - 优先使用此参数
     """
     if speaker is None:
         speaker = config.service.tts_default_speaker
@@ -311,7 +312,7 @@ async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = T
 
         if fast_mode:
             # 使用 Edge-TTS
-            audio_data = await _generate_edge_tts_audio_async(text, speaker, speaking_speed)
+            audio_data = await _generate_edge_tts_audio_async(text, speaker, speaking_speed, speaking_rate)
         else:
             # 使用本地 TTS
             audio_data = _generate_local_tts_audio(text, speaker)
@@ -336,27 +337,32 @@ async def generate_audio_url(text: str, speaker: str = None, fast_mode: bool = T
         return None
 
 
-async def _generate_edge_tts_audio_async(text: str, speaker: str, speaking_speed: str = "medium") -> Optional[bytes]:
+async def _generate_edge_tts_audio_async(text: str, speaker: str, speaking_speed: str = "medium", speaking_rate: str = None) -> Optional[bytes]:
     """异步使用Edge-TTS生成音频数据
 
     Args:
         text: 要合成的文本
         speaker: 说话人
-        speaking_speed: 语速 (slow/medium/fast)
+        speaking_speed: 语速 (slow/medium/fast) - 用于向后兼容
+        speaking_rate: 精确语速控制 (如 "-30%", "+0%", "+50%") - 优先使用此参数
     """
     try:
         import edge_tts
 
         voice = config.get_edge_tts_voice(speaker)
 
-        # 将speaking_speed转换为Edge-TTS的rate参数
-        # Edge-TTS rate: -50% to +100% (default 0%)
-        rate_map = {
-            "slow": "-30%",    # 慢速：减少30%
-            "medium": "+0%",   # 正常速度
-            "fast": "+30%"     # 快速：增加30%
-        }
-        rate = rate_map.get(speaking_speed, "+0%")
+        # 优先使用 speaking_rate，否则使用 speaking_speed 映射
+        if speaking_rate:
+            rate = speaking_rate
+        else:
+            # 将speaking_speed转换为Edge-TTS的rate参数
+            # Edge-TTS rate: -50% to +100% (default 0%)
+            rate_map = {
+                "slow": "-30%",    # 慢速：减少30%
+                "medium": "+0%",   # 正常速度
+                "fast": "+30%"     # 快速：增加30%
+            }
+            rate = rate_map.get(speaking_speed, "+0%")
 
         logger.info(f"[TTS] Edge-TTS voice: {voice}, rate: {rate}, text: {text[:30]}...")
 
@@ -407,6 +413,7 @@ class ChatStartRequest(BaseModel):
     level: str = "B1"
     turns: int = 20
     speaker: Optional[str] = None  # TTS voice role
+    speaking_rate: Optional[str] = None  # Speaking rate: "-50%", "+0%", "+30%", etc.
 
 
 class ChatTips(BaseModel):
@@ -431,6 +438,7 @@ class ChatMessageRequest(BaseModel):
     session_id: str
     message: str
     speaker: Optional[str] = None  # TTS voice role
+    speaking_rate: Optional[str] = None  # Speaking rate: "-50%", "+0%", "+30%", etc.
 
 
 class ChatMessageResponse(BaseModel):
@@ -876,6 +884,14 @@ async def chat_start(request: ChatStartRequest):
         # 保存语速到会话中，供后续消息使用
         session["speaking_speed"] = speaking_speed
 
+        # 保存精确语速控制（如果提供）
+        if request.speaking_rate:
+            session["speaking_rate"] = request.speaking_rate
+        else:
+            # 根据 speaking_speed 设置默认 speaking_rate
+            rate_map = {"slow": "-30%", "medium": "+0%", "fast": "+30%"}
+            session["speaking_rate"] = rate_map.get(speaking_speed, "+0%")
+
         # 保存语音角色到会话中，供后续消息使用
         speaker = request.speaker or config.service.tts_default_speaker
         session["speaker"] = speaker
@@ -885,7 +901,8 @@ async def chat_start(request: ChatStartRequest):
             greeting,
             speaker=speaker,
             fast_mode=True,
-            speaking_speed=speaking_speed
+            speaking_speed=speaking_speed,
+            speaking_rate=session["speaking_rate"]
         )
 
         # 生成开场白的对话提示
@@ -1003,11 +1020,18 @@ Assistant:"""
         # 更新会话中的speaker（如果请求中提供了新的speaker）
         if request.speaker:
             session["speaker"] = request.speaker
+
+        # 处理语速设置：优先使用请求中的 speaking_rate，否则使用会话中的
+        if request.speaking_rate:
+            session["speaking_rate"] = request.speaking_rate
+        speaking_rate = session.get("speaking_rate", "+0%")
+
         audio_url = await generate_audio_url(
             reply,
             speaker=speaker,
             fast_mode=True,
-            speaking_speed=speaking_speed
+            speaking_speed=speaking_speed,
+            speaking_rate=speaking_rate
         )
 
         # 检查是否结束

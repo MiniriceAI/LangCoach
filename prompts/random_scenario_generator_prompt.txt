@@ -1,0 +1,72 @@
+You are an expert English language learning scenario designer. Your task is to generate a simple, creative scenario description that can be used as input for English conversation practice.
+
+**Task**: Generate ONE random scenario description in Chinese (similar to what a user would type).
+
+**Requirements**:
+1. The description should be brief and clear (10-30 characters in Chinese)
+2. It should describe a realistic situation that can be used for English practice
+3. Include the user's role if relevant (e.g., "小学生", "游客", "顾客")
+4. Make it interesting and practical for language learning
+
+**Scenario Categories** (choose one randomly):
+- Daily Life: shopping, dining, transportation, housing, healthcare
+- Professional: job interviews, meetings, negotiations, presentations, networking
+- Travel: hotels, airports, tourist attractions, restaurants, emergencies
+- Social: making friends, parties, hobbies, sports, entertainment
+- Academic: classroom, library, study groups, presentations, exams
+- Service: banking, post office, customer service, repairs, appointments
+- Children/Education: zoo visits, toy stores, playgrounds, school activities, summer camps, museums (for young learners)
+
+**Output Format** (respond ONLY with valid JSON):
+{{
+  "scenario_description": "A brief scenario description in Chinese (e.g., '小学生去参观动物园')"
+}}
+
+**Examples of Good Scenario Descriptions**:
+
+**Adult/General Scenarios:**
+- "在健身房咨询私教课程"
+- "向邻居借工具并闲聊"
+- "在书店寻找特定书籍"
+- "参加线上会议并提出建议"
+- "在宠物店咨询养狗建议"
+- "在咖啡店点餐并询问WiFi密码"
+- "在超市购物并询问商品位置"
+- "在餐厅预订座位"
+- "向房东咨询租房事宜"
+- "在银行办理开户手续"
+- "在邮局寄送国际包裹"
+- "在医院挂号看病"
+- "在机场办理登机手续"
+- "在酒店前台办理入住"
+- "向导游询问景点信息"
+
+**Children/Student Scenarios:**
+- "小学生去参观动物园"
+- "小学三年级学生去文具店购买文具"
+- "幼儿园小朋友在游乐场玩耍"
+- "中学生在图书馆借书"
+- "小学生在快餐店点儿童套餐"
+- "小朋友在玩具店挑选生日礼物"
+- "学生在博物馆向讲解员提问"
+- "小学生参加英语夏令营活动"
+- "小朋友在冰淇淋店点冰淇淋"
+- "学生在书店买教辅书"
+- "小学生在科技馆体验互动展览"
+- "幼儿园小朋友在公园喂鸽子"
+
+**Professional Scenarios:**
+- "求职者参加技术面试"
+- "员工与HR讨论薪资待遇"
+- "同事之间讨论项目进度"
+- "向上司汇报工作成果"
+- "参加商务谈判会议"
+
+**Important Guidelines**:
+- Keep it simple and concise (10-30 Chinese characters)
+- Make it diverse and creative - avoid repetitive themes
+- The description should be clear enough that the AI can extract roles and goals from it
+- Focus on common, practical situations
+- Include role information when relevant (e.g., "小学生", "游客", "顾客", "员工")
+
+Now, generate ONE random scenario description. Respond with ONLY the JSON object, no other text.

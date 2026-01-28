@@ -6,7 +6,6 @@ LangCoach Mini Program Unified API
 - 对话管理 (Chat)
 - 语音识别 (STT)
 - 语音合成 (TTS)
-- 词典查询 (Dictionary)
 - 用户认证 (Auth)
 
 Usage:
@@ -514,13 +513,6 @@ class TranscribeResponse(BaseModel):
     language: str = "en"
 
 
-# --- Dictionary Models ---
-class DictionaryResponse(BaseModel):
-    """词典查询响应"""
-    word: str
-    phonetic: Optional[str] = None
-    definition: Optional[str] = None
-
 
 # ============================================================
 # Session Management
@@ -1017,7 +1009,6 @@ Assistant:"""
             tips = config.get_random_tips(3)
             report = {
                 "grammarScore": scores["grammarScore"],
-                "vocabularyScore": scores["vocabularyScore"],
                 "fluencyScore": scores["fluencyScore"],
                 "totalTurns": session["current_turn"],
                 "tips": tips
@@ -1505,30 +1496,6 @@ async def _generate_random_scenario_llm() -> RandomScenarioResponse:
     except Exception as e:
         logger.error(f"Error generating LLM scenario: {e}")
         raise
-
-
-# ============================================================
-# Dictionary Endpoint
-# ============================================================
-
-@app.get("/api/dictionary", response_model=DictionaryResponse)
-async def dictionary_lookup(word: str):
-    """查询单词释义"""
-    word_lower = word.lower().strip()
-
-    if word_lower in config.content.simple_dictionary:
-        entry = config.content.simple_dictionary[word_lower]
-        return DictionaryResponse(
-            word=word,
-            phonetic=entry["phonetic"],
-            definition=entry["definition"]
-        )
-
-    return DictionaryResponse(
-        word=word,
-        phonetic=None,
-        definition="Definition not available. Try an online dictionary."
-    )
 
 
 # ============================================================

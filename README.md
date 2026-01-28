@@ -21,11 +21,11 @@
 
 ## 📖 简介 / Introduction
 
-LangCoach 是一款基于大语言模型（LLM）的智能英语私教系统，通过场景化对话练习和词汇学习，帮助学习者提升英语口语表达能力。系统支持多种 LLM 提供者（DeepSeek、OpenAI、Ollama），并提供友好的 Web 界面，让英语学习变得轻松有趣。
+LangCoach 是一款基于大语言模型（LLM）的智能英语私教系统，通过场景化对话练习，帮助学习者提升英语口语表达能力。系统支持多种 LLM 提供者（DeepSeek、OpenAI、Ollama），并提供友好的 Web 界面，让英语学习变得轻松有趣。
 
 **Phase 2 新增**：集成 Milvus 向量数据库，实现长期记忆功能，让 AI 能够记住你的学习历程并提供个性化建议。
 
-LangCoach is an AI-powered English learning platform that helps learners improve their English speaking skills through scenario-based dialogue practice and vocabulary learning. Supporting multiple LLM providers (DeepSeek, OpenAI, Ollama), it provides a user-friendly web interface for an engaging learning experience.
+LangCoach is an AI-powered English learning platform that helps learners improve their English speaking skills through scenario-based dialogue practice. Supporting multiple LLM providers (DeepSeek, OpenAI, Ollama), it provides a user-friendly web interface for an engaging learning experience.
 
 **Phase 2 Update**: Integrated Milvus vector database for long-term memory, enabling AI to remember your learning journey and provide personalized recommendations.
 
@@ -40,7 +40,7 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 
 ### 🎨 自定义场景功能 / Custom Scenario Feature (New!)
 - **智能场景分析** - 输入场景描述（如"小学三年级学生，去超市买文具"），AI 自动提取角色、目标、挑战等信息
-- **自适应难度** - 根据场景自动调整难度级别、语速和词汇复杂度
+- **自适应难度** - 根据场景自动调整难度级别和语速
 - **无限对话** - 自定义场景没有轮数限制，随时可以退出
 - **随机场景** - 提供随机场景建议，快速开始练习
 
@@ -179,7 +179,6 @@ LangCoach is an AI-powered English learning platform that helps learners improve
 - **Agent Layer** (`src/agents/`)
   - `AgentBase`: 代理基类，提供通用功能和长期记忆支持 (Phase 2 增强)
   - `ScenarioAgent`: 场景对话代理
-  - `VocabAgent`: 词汇学习代理
   - `llm_factory.py`: LLM 工厂，统一管理多 LLM 提供者
   - `long_term_memory.py`: 长期记忆管理器 (Phase 2 新增)
   - `conversation_config.py`: 对话配置管理 (Phase 1 新增)
@@ -369,7 +368,6 @@ uvicorn src.api.miniprogram_api:app --host 0.0.0.0 --port 8600
 - 自定义场景 (`/api/custom-scenario/*`) - 场景提取和 prompt 生成
 - 语音识别 (`/api/transcribe`)
 - 语音合成 (`/api/synthesize`)
-- 词典查询 (`/api/dictionary`)
 
 > 📖 详细文档请参考 [MINIPROGRAM_API.md](MINIPROGRAM_API.md)
 
@@ -483,7 +481,6 @@ LangCoach/
 │   ├── agents/                 # 代理模块
 │   │   ├── agent_base.py       # 代理基类 (Phase 2 增强)
 │   │   ├── scenario_agent.py   # 场景代理
-│   │   ├── vocab_agent.py      # 词汇代理
 │   │   ├── llm_factory.py      # LLM 工厂
 │   │   ├── long_term_memory.py # 长期记忆管理器 (Phase 2 新增)
 │   │   ├── conversation_config.py # 对话配置 (Phase 1 新增)

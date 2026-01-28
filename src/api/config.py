@@ -87,17 +87,7 @@ class ContentConfig:
     # Random scenario generation mode: "preset" or "llm"
     random_scenario_mode: str = "preset"
 
-    # Dictionary entries (in production, this would be from external API)
-    simple_dictionary: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        "hello": {"phonetic": "/hə'loʊ/", "definition": "used as a greeting"},
-        "interview": {"phonetic": "/'ɪntər,vjuː/", "definition": "a formal meeting for assessment"},
-        "salary": {"phonetic": "/'sæləri/", "definition": "fixed regular payment for work"},
-        "experience": {"phonetic": "/ɪk'spɪriəns/", "definition": "practical contact with events"},
-        "hotel": {"phonetic": "/hoʊ'tel/", "definition": "an establishment providing lodging"},
-        "apartment": {"phonetic": "/ə'pɑːrtmənt/", "definition": "a self-contained housing unit"},
-        "rent": {"phonetic": "/rent/", "definition": "payment for use of property"},
-        "negotiate": {"phonetic": "/nɪ'goʊʃieɪt/", "definition": "to discuss to reach an agreement"}
-    })
+
 
 
 @dataclass 
@@ -106,7 +96,6 @@ class ScoreConfig:
     
     # Default scoring ranges for session reports
     grammar_score_range: tuple = (70, 95)
-    vocabulary_score_range: tuple = (65, 90) 
     fluency_score_range: tuple = (70, 95)
     
     # Feedback tips pool
@@ -203,7 +192,6 @@ class ConfigManager:
         import random
         return {
             "grammarScore": random.randint(*self.scoring.grammar_score_range),
-            "vocabularyScore": random.randint(*self.scoring.vocabulary_score_range), 
             "fluencyScore": random.randint(*self.scoring.fluency_score_range)
         }
     

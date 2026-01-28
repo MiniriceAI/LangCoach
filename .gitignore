@@ -212,3 +212,5 @@ claude.md
 unsloth_compiled_cache/
 
 evaluation/reports/
+
+*.png

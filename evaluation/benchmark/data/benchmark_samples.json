@@ -1,0 +1,1006 @@
+{
+  "version": "1.0",
+  "total_samples": 100,
+  "samples": [
+    {
+      "id": 0,
+      "user_input": "Hi, I'm here for the software engineer interview.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "Hi, I'm here for the software engineer interview.",
+      "metadata": {}
+    },
+    {
+      "id": 1,
+      "user_input": "I have five years of experience in Python development.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I have five years of experience in Python development.",
+      "metadata": {}
+    },
+    {
+      "id": 2,
+      "user_input": "My biggest strength is problem-solving.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "My biggest strength is problem-solving.",
+      "metadata": {}
+    },
+    {
+      "id": 3,
+      "user_input": "I left my previous job to seek new challenges.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I left my previous job to seek new challenges.",
+      "metadata": {}
+    },
+    {
+      "id": 4,
+      "user_input": "I'm looking for a salary around 150k.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I'm looking for a salary around 150k.",
+      "metadata": {}
+    },
+    {
+      "id": 5,
+      "user_input": "I can start in two weeks after giving notice.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I can start in two weeks after giving notice.",
+      "metadata": {}
+    },
+    {
+      "id": 6,
+      "user_input": "Yes, I'm comfortable with remote work.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "Yes, I'm comfortable with remote work.",
+      "metadata": {}
+    },
+    {
+      "id": 7,
+      "user_input": "I prefer working in agile teams.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I prefer working in agile teams.",
+      "metadata": {}
+    },
+    {
+      "id": 8,
+      "user_input": "My weakness is sometimes being too detail-oriented.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "My weakness is sometimes being too detail-oriented.",
+      "metadata": {}
+    },
+    {
+      "id": 9,
+      "user_input": "I handled a difficult project by breaking it into smaller tasks.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I handled a difficult project by breaking it into smaller tasks.",
+      "metadata": {}
+    },
+    {
+      "id": 10,
+      "user_input": "I'm passionate about clean code and best practices.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I'm passionate about clean code and best practices.",
+      "metadata": {}
+    },
+    {
+      "id": 11,
+      "user_input": "I've led a team of three developers before.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I've led a team of three developers before.",
+      "metadata": {}
+    },
+    {
+      "id": 12,
+      "user_input": "I'm familiar with AWS and cloud deployment.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I'm familiar with AWS and cloud deployment.",
+      "metadata": {}
+    },
+    {
+      "id": 13,
+      "user_input": "I enjoy mentoring junior developers.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I enjoy mentoring junior developers.",
+      "metadata": {}
+    },
+    {
+      "id": 14,
+      "user_input": "My long-term goal is to become a tech lead.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "My long-term goal is to become a tech lead.",
+      "metadata": {}
+    },
+    {
+      "id": 15,
+      "user_input": "I've worked with React and Vue.js frameworks.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I've worked with React and Vue.js frameworks.",
+      "metadata": {}
+    },
+    {
+      "id": 16,
+      "user_input": "I handle stress by prioritizing tasks effectively.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I handle stress by prioritizing tasks effectively.",
+      "metadata": {}
+    },
+    {
+      "id": 17,
+      "user_input": "I'm interested in your company's AI initiatives.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I'm interested in your company's AI initiatives.",
+      "metadata": {}
+    },
+    {
+      "id": 18,
+      "user_input": "I've contributed to several open source projects.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I've contributed to several open source projects.",
+      "metadata": {}
+    },
+    {
+      "id": 19,
+      "user_input": "I believe in continuous learning and improvement.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I believe in continuous learning and improvement.",
+      "metadata": {}
+    },
+    {
+      "id": 20,
+      "user_input": "I can work well both independently and in teams.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I can work well both independently and in teams.",
+      "metadata": {}
+    },
+    {
+      "id": 21,
+      "user_input": "I've experience with microservices architecture.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I've experience with microservices architecture.",
+      "metadata": {}
+    },
+    {
+      "id": 22,
+      "user_input": "I'm comfortable with code reviews and pair programming.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I'm comfortable with code reviews and pair programming.",
+      "metadata": {}
+    },
+    {
+      "id": 23,
+      "user_input": "I've dealt with tight deadlines successfully.",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "I've dealt with tight deadlines successfully.",
+      "metadata": {}
+    },
+    {
+      "id": 24,
+      "user_input": "Do you have any questions about my background?",
+      "scenario": "job_interview",
+      "difficulty": "medium",
+      "category": "job_interview",
+      "audio_path": null,
+      "expected_transcription": "Do you have any questions about my background?",
+      "metadata": {}
+    },
+    {
+      "id": 25,
+      "user_input": "Hello, I have a reservation under the name Smith.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Hello, I have a reservation under the name Smith.",
+      "metadata": {}
+    },
+    {
+      "id": 26,
+      "user_input": "I booked a room for three nights.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I booked a room for three nights.",
+      "metadata": {}
+    },
+    {
+      "id": 27,
+      "user_input": "Do you have any rooms with a sea view?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Do you have any rooms with a sea view?",
+      "metadata": {}
+    },
+    {
+      "id": 28,
+      "user_input": "What time is breakfast served?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "What time is breakfast served?",
+      "metadata": {}
+    },
+    {
+      "id": 29,
+      "user_input": "Is there WiFi in the rooms?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Is there WiFi in the rooms?",
+      "metadata": {}
+    },
+    {
+      "id": 30,
+      "user_input": "Can I get a late checkout tomorrow?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can I get a late checkout tomorrow?",
+      "metadata": {}
+    },
+    {
+      "id": 31,
+      "user_input": "Where is the nearest restaurant?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Where is the nearest restaurant?",
+      "metadata": {}
+    },
+    {
+      "id": 32,
+      "user_input": "I'd like to request extra towels please.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I'd like to request extra towels please.",
+      "metadata": {}
+    },
+    {
+      "id": 33,
+      "user_input": "Is the gym open 24 hours?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Is the gym open 24 hours?",
+      "metadata": {}
+    },
+    {
+      "id": 34,
+      "user_input": "Can you recommend any local attractions?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can you recommend any local attractions?",
+      "metadata": {}
+    },
+    {
+      "id": 35,
+      "user_input": "I need a wake-up call at 7 AM.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I need a wake-up call at 7 AM.",
+      "metadata": {}
+    },
+    {
+      "id": 36,
+      "user_input": "Is parking included in the room rate?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Is parking included in the room rate?",
+      "metadata": {}
+    },
+    {
+      "id": 37,
+      "user_input": "Can I store my luggage after checkout?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can I store my luggage after checkout?",
+      "metadata": {}
+    },
+    {
+      "id": 38,
+      "user_input": "The air conditioning isn't working properly.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "The air conditioning isn't working properly.",
+      "metadata": {}
+    },
+    {
+      "id": 39,
+      "user_input": "I'd like to extend my stay by one night.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I'd like to extend my stay by one night.",
+      "metadata": {}
+    },
+    {
+      "id": 40,
+      "user_input": "Do you have a business center?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Do you have a business center?",
+      "metadata": {}
+    },
+    {
+      "id": 41,
+      "user_input": "Can I get a room on a higher floor?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can I get a room on a higher floor?",
+      "metadata": {}
+    },
+    {
+      "id": 42,
+      "user_input": "Is there a shuttle to the airport?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Is there a shuttle to the airport?",
+      "metadata": {}
+    },
+    {
+      "id": 43,
+      "user_input": "I need to change my room, it's too noisy.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I need to change my room, it's too noisy.",
+      "metadata": {}
+    },
+    {
+      "id": 44,
+      "user_input": "What's the checkout time?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "What's the checkout time?",
+      "metadata": {}
+    },
+    {
+      "id": 45,
+      "user_input": "Can I pay with a credit card?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can I pay with a credit card?",
+      "metadata": {}
+    },
+    {
+      "id": 46,
+      "user_input": "Is there a minibar in the room?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Is there a minibar in the room?",
+      "metadata": {}
+    },
+    {
+      "id": 47,
+      "user_input": "I'd like to order room service.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "I'd like to order room service.",
+      "metadata": {}
+    },
+    {
+      "id": 48,
+      "user_input": "Can you call a taxi for me?",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Can you call a taxi for me?",
+      "metadata": {}
+    },
+    {
+      "id": 49,
+      "user_input": "Thank you for your help.",
+      "scenario": "hotel_checkin",
+      "difficulty": "primary",
+      "category": "hotel_checkin",
+      "audio_path": null,
+      "expected_transcription": "Thank you for your help.",
+      "metadata": {}
+    },
+    {
+      "id": 50,
+      "user_input": "I'm looking for a two-bedroom apartment.",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "I'm looking for a two-bedroom apartment.",
+      "metadata": {}
+    },
+    {
+      "id": 51,
+      "user_input": "What's the monthly rent for this place?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "What's the monthly rent for this place?",
+      "metadata": {}
+    },
+    {
+      "id": 52,
+      "user_input": "Are utilities included in the rent?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Are utilities included in the rent?",
+      "metadata": {}
+    },
+    {
+      "id": 53,
+      "user_input": "Is there a security deposit required?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is there a security deposit required?",
+      "metadata": {}
+    },
+    {
+      "id": 54,
+      "user_input": "How long is the lease term?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "How long is the lease term?",
+      "metadata": {}
+    },
+    {
+      "id": 55,
+      "user_input": "Can I see the apartment today?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Can I see the apartment today?",
+      "metadata": {}
+    },
+    {
+      "id": 56,
+      "user_input": "Is the neighborhood safe?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is the neighborhood safe?",
+      "metadata": {}
+    },
+    {
+      "id": 57,
+      "user_input": "Are pets allowed in this building?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Are pets allowed in this building?",
+      "metadata": {}
+    },
+    {
+      "id": 58,
+      "user_input": "When would the apartment be available?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "When would the apartment be available?",
+      "metadata": {}
+    },
+    {
+      "id": 59,
+      "user_input": "Is there in-unit laundry?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is there in-unit laundry?",
+      "metadata": {}
+    },
+    {
+      "id": 60,
+      "user_input": "How much is the parking fee?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "How much is the parking fee?",
+      "metadata": {}
+    },
+    {
+      "id": 61,
+      "user_input": "Are there any move-in specials?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Are there any move-in specials?",
+      "metadata": {}
+    },
+    {
+      "id": 62,
+      "user_input": "What's included in the lease?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "What's included in the lease?",
+      "metadata": {}
+    },
+    {
+      "id": 63,
+      "user_input": "Can I paint the walls?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Can I paint the walls?",
+      "metadata": {}
+    },
+    {
+      "id": 64,
+      "user_input": "Is there central air conditioning?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is there central air conditioning?",
+      "metadata": {}
+    },
+    {
+      "id": 65,
+      "user_input": "How do I submit maintenance requests?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "How do I submit maintenance requests?",
+      "metadata": {}
+    },
+    {
+      "id": 66,
+      "user_input": "What's the policy on subletting?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "What's the policy on subletting?",
+      "metadata": {}
+    },
+    {
+      "id": 67,
+      "user_input": "Are there any noise restrictions?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Are there any noise restrictions?",
+      "metadata": {}
+    },
+    {
+      "id": 68,
+      "user_input": "Is renters insurance required?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is renters insurance required?",
+      "metadata": {}
+    },
+    {
+      "id": 69,
+      "user_input": "Can I install my own internet?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Can I install my own internet?",
+      "metadata": {}
+    },
+    {
+      "id": 70,
+      "user_input": "What happens if I need to break the lease?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "What happens if I need to break the lease?",
+      "metadata": {}
+    },
+    {
+      "id": 71,
+      "user_input": "Is there a gym in the building?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Is there a gym in the building?",
+      "metadata": {}
+    },
+    {
+      "id": 72,
+      "user_input": "How is the water pressure?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "How is the water pressure?",
+      "metadata": {}
+    },
+    {
+      "id": 73,
+      "user_input": "Are there any upcoming rent increases?",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "Are there any upcoming rent increases?",
+      "metadata": {}
+    },
+    {
+      "id": 74,
+      "user_input": "I'd like to apply for this apartment.",
+      "scenario": "renting",
+      "difficulty": "medium",
+      "category": "renting",
+      "audio_path": null,
+      "expected_transcription": "I'd like to apply for this apartment.",
+      "metadata": {}
+    },
+    {
+      "id": 75,
+      "user_input": "I'd like to discuss my compensation package.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I'd like to discuss my compensation package.",
+      "metadata": {}
+    },
+    {
+      "id": 76,
+      "user_input": "Based on my research, the market rate is higher.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Based on my research, the market rate is higher.",
+      "metadata": {}
+    },
+    {
+      "id": 77,
+      "user_input": "I believe my experience justifies a higher salary.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I believe my experience justifies a higher salary.",
+      "metadata": {}
+    },
+    {
+      "id": 78,
+      "user_input": "Can we discuss the bonus structure?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Can we discuss the bonus structure?",
+      "metadata": {}
+    },
+    {
+      "id": 79,
+      "user_input": "What about stock options or equity?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What about stock options or equity?",
+      "metadata": {}
+    },
+    {
+      "id": 80,
+      "user_input": "I'm looking for a 15% increase.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I'm looking for a 15% increase.",
+      "metadata": {}
+    },
+    {
+      "id": 81,
+      "user_input": "My current offer is below my expectations.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "My current offer is below my expectations.",
+      "metadata": {}
+    },
+    {
+      "id": 82,
+      "user_input": "Can we revisit this in six months?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Can we revisit this in six months?",
+      "metadata": {}
+    },
+    {
+      "id": 83,
+      "user_input": "What's the typical raise percentage here?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What's the typical raise percentage here?",
+      "metadata": {}
+    },
+    {
+      "id": 84,
+      "user_input": "I have another offer with better compensation.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I have another offer with better compensation.",
+      "metadata": {}
+    },
+    {
+      "id": 85,
+      "user_input": "Is there flexibility in the base salary?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Is there flexibility in the base salary?",
+      "metadata": {}
+    },
+    {
+      "id": 86,
+      "user_input": "What benefits are included in the package?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What benefits are included in the package?",
+      "metadata": {}
+    },
+    {
+      "id": 87,
+      "user_input": "Can we negotiate the signing bonus?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Can we negotiate the signing bonus?",
+      "metadata": {}
+    },
+    {
+      "id": 88,
+      "user_input": "I'd like more vacation days instead.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I'd like more vacation days instead.",
+      "metadata": {}
+    },
+    {
+      "id": 89,
+      "user_input": "What's the path to promotion here?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What's the path to promotion here?",
+      "metadata": {}
+    },
+    {
+      "id": 90,
+      "user_input": "How often are performance reviews conducted?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "How often are performance reviews conducted?",
+      "metadata": {}
+    },
+    {
+      "id": 91,
+      "user_input": "Is remote work an option for this role?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Is remote work an option for this role?",
+      "metadata": {}
+    },
+    {
+      "id": 92,
+      "user_input": "Can we discuss professional development budget?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Can we discuss professional development budget?",
+      "metadata": {}
+    },
+    {
+      "id": 93,
+      "user_input": "What's the 401k matching policy?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What's the 401k matching policy?",
+      "metadata": {}
+    },
+    {
+      "id": 94,
+      "user_input": "I need to think about this offer.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I need to think about this offer.",
+      "metadata": {}
+    },
+    {
+      "id": 95,
+      "user_input": "Can you put this offer in writing?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Can you put this offer in writing?",
+      "metadata": {}
+    },
+    {
+      "id": 96,
+      "user_input": "What's the deadline for my decision?",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "What's the deadline for my decision?",
+      "metadata": {}
+    },
+    {
+      "id": 97,
+      "user_input": "I'm excited about this opportunity.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I'm excited about this opportunity.",
+      "metadata": {}
+    },
+    {
+      "id": 98,
+      "user_input": "Let me discuss this with my family.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "Let me discuss this with my family.",
+      "metadata": {}
+    },
+    {
+      "id": 99,
+      "user_input": "I accept the offer. Thank you.",
+      "scenario": "salary_negotiation",
+      "difficulty": "advanced",
+      "category": "salary_negotiation",
+      "audio_path": null,
+      "expected_transcription": "I accept the offer. Thank you.",
+      "metadata": {}
+    }
+  ]
+}

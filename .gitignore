@@ -122,7 +122,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .venv
 env/
 venv/
@@ -199,6 +198,19 @@ temp/
 # Docker
 .docker/
 
+# Docker volumes (Phase 2 - Milvus data)
+volumes/
+
 Changelog.md
 
 claude.md
+
+.claude/
+
+.locks/
+
+unsloth_compiled_cache/
+
+evaluation/reports/
+
+*.png.env

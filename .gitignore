@@ -213,4 +213,5 @@ unsloth_compiled_cache/
 
 evaluation/reports/
 
-*.png.env
+*.png
+.env

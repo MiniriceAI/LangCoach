@@ -90,6 +90,23 @@ class ReportGenerator:
         lines.append(f"    Success Rate: {data.get('success_rate', 0):.1f}%")
         lines.append(f"    Total Samples: {data.get('total_count', 0)}")
 
+        # Quality metrics (DQI)
+        extra = data.get('extra_metrics', {})
+        if 'dqi' in extra:
+            dqi = extra['dqi']
+            status = "✓" if dqi >= 85.0 else "⚠️"
+            lines.append(f"    Daily Quality Index (DQI): {status} {dqi:.2f}%")
+
+            # Show metric pass rates
+            lines.append(f"    Quality Metrics:")
+            for metric in ['q1_role_adherence', 'q2_tone_consistency', 'q3_turn_count_limit',
+                          'q4_level_appropriateness', 'q5_correction_behavior',
+                          'q6_brevity_encouragement', 'q7_language_quality', 'q8_safety_filter']:
+                if f"{metric}_pass_rate" in extra:
+                    pass_rate = extra[f"{metric}_pass_rate"]
+                    status = "✓" if pass_rate >= 85.0 else "⚠️"
+                    lines.append(f"      {status} {metric}: {pass_rate:.1f}%")
+
         # Timing
         timing = data.get('timing', {})
         if timing:
@@ -110,15 +127,17 @@ class ReportGenerator:
                     comp_timing = breakdown[component]
                     lines.append(f"      {component.upper()}: {comp_timing.get('mean_ms', 0):.0f}ms (P95: {comp_timing.get('p95_ms', 0):.0f}ms)")
 
-        # Extra metrics
-        extra = data.get('extra_metrics', {})
+        # Extra metrics (excluding quality metrics already shown)
         if extra:
-            lines.append(f"    Extra Metrics:")
-            for key, value in extra.items():
-                if isinstance(value, float):
-                    lines.append(f"      {key}: {value:.2f}")
-                else:
-                    lines.append(f"      {key}: {value}")
+            other_metrics = {k: v for k, v in extra.items()
+                           if not k.startswith('q') and k not in ['dqi', 'dqi_median', 'dqi_min', 'dqi_max']}
+            if other_metrics:
+                lines.append(f"    Extra Metrics:")
+                for key, value in other_metrics.items():
+                    if isinstance(value, float):
+                        lines.append(f"      {key}: {value:.2f}")
+                    else:
+                        lines.append(f"      {key}: {value}")
 
         return lines
 
@@ -212,6 +231,29 @@ class ReportGenerator:
         lines.append(f"- **Total Samples:** {data.get('total_count', 0)}")
         lines.append("")
 
+        # Quality metrics (DQI)
+        extra = data.get('extra_metrics', {})
+        if 'dqi' in extra:
+            dqi = extra['dqi']
+            status = "✅" if dqi >= 85.0 else "⚠️"
+            lines.append(f"**Daily Quality Index (DQI):** {status} {dqi:.2f}%")
+            lines.append("")
+
+            # Quality metrics table
+            lines.append("**Quality Metrics Pass Rates:**")
+            lines.append("")
+            lines.append("| Metric | Pass Rate | Status |")
+            lines.append("|--------|-----------|--------|")
+            for metric in ['q1_role_adherence', 'q2_tone_consistency', 'q3_turn_count_limit',
+                          'q4_level_appropriateness', 'q5_correction_behavior',
+                          'q6_brevity_encouragement', 'q7_language_quality', 'q8_safety_filter']:
+                if f"{metric}_pass_rate" in extra:
+                    pass_rate = extra[f"{metric}_pass_rate"]
+                    status = "✅" if pass_rate >= 85.0 else "⚠️"
+                    metric_name = metric.replace('_', ' ').title()
+                    lines.append(f"| {metric_name} | {pass_rate:.1f}% | {status} |")
+            lines.append("")
+
         # Timing table
         timing = data.get('timing', {})
         if timing:
@@ -242,17 +284,19 @@ class ReportGenerator:
                     lines.append(f"| {component.upper()} | {comp.get('mean_ms', 0):.0f}ms | {comp.get('p95_ms', 0):.0f}ms |")
             lines.append("")
 
-        # Extra metrics
-        extra = data.get('extra_metrics', {})
+        # Extra metrics (excluding quality metrics already shown)
         if extra:
-            lines.append("**Additional Metrics:**")
-            lines.append("")
-            for key, value in extra.items():
-                if isinstance(value, float):
-                    lines.append(f"- {key}: {value:.2f}")
-                else:
-                    lines.append(f"- {key}: {value}")
-            lines.append("")
+            other_metrics = {k: v for k, v in extra.items()
+                           if not k.startswith('q') and k not in ['dqi', 'dqi_median', 'dqi_min', 'dqi_max']}
+            if other_metrics:
+                lines.append("**Additional Metrics:**")
+                lines.append("")
+                for key, value in other_metrics.items():
+                    if isinstance(value, float):
+                        lines.append(f"- {key}: {value:.2f}")
+                    else:
+                        lines.append(f"- {key}: {value}")
+                lines.append("")
 
         return lines
 

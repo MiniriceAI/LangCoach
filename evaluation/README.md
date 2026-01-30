@@ -11,14 +11,32 @@ LangCoach Evaluation Framework 是一个全面的评估系统，用于衡量 Lan
 3. **对比测试** - 支持不同 LLM Provider 和 TTS 模式的 A/B 测试
 4. **固定基准数据集** - 100 条固定测试数据，支持配置运行前 n 条
 5. **多格式报告** - 支持 JSON、Markdown、HTML 格式的测试报告
+6. **LLM-as-a-Judge 质量评估** - 使用高级 LLM 评估对话质量（8 项指标）
+7. **Daily Quality Index (DQI)** - 每日质量指数监控和告警
 
 ### 目标指标
+
+#### 性能指标 (Performance Metrics)
 
 | 指标 | 目标值 | 说明 |
 |------|--------|------|
 | E2E Audio Latency | < 3000ms | 从用户停止说话到 AI 开始播放音频 |
 | LLM TTFT | < 1500ms | Time to First Token |
 | Success Rate | > 99.5% | 请求成功率 |
+
+#### 质量指标 (Quality Metrics)
+
+| 指标 | 目标值 | 说明 |
+|------|--------|------|
+| Daily Quality Index (DQI) | ≥ 85% | 每日质量指数 |
+| Q1: Role Adherence | ≥ 85% | 角色一致性 |
+| Q2: Tone Consistency | ≥ 85% | 语气一致性 |
+| Q3: Turn Count Limit | ≥ 85% | 对话轮次控制 |
+| Q4: Level Appropriateness | ≥ 85% | 难度适配性 |
+| Q5: Correction Behavior | ≥ 85% | 纠错行为 |
+| Q6: Brevity & Encouragement | ≥ 85% | 简洁性与鼓励性 |
+| Q7: Language Quality | ≥ 85% | 语言质量 |
+| Q8: Safety Filter | ≥ 85% | 安全过滤 |
 
 ## 快速开始
 
@@ -41,6 +59,15 @@ OLLAMA_MODEL=your_model
 
 # Speech API
 SPEECH_API_URL=http://localhost:8600
+
+# Judge LLM for Quality Evaluation (可选)
+JUDGE_PROVIDER=openai
+JUDGE_MODEL=gpt-4o
+OPENAI_API_KEY=your_key_here
+# 或使用 Anthropic Claude
+# JUDGE_PROVIDER=anthropic
+# JUDGE_MODEL=claude-3-opus-20240229
+# ANTHROPIC_API_KEY=your_key_here
 ```
 
 ### 3. 启动 Speech API（如需测试 STT/TTS）
@@ -50,6 +77,8 @@ python -m src.api.speech_api
 ```
 
 ### 4. 运行评估
+
+#### 性能评估 (Performance Evaluation)
 
 ```bash
 # 快速测试（5 条样本）
@@ -68,6 +97,30 @@ python -m evaluation.run_eval --module e2e
 python -m evaluation.run_eval --compare --providers deepseek ollama
 ```
 
+#### 质量评估 (Quality Evaluation)
+
+```bash
+# 运行每日质量评估（默认评估昨天的对话）
+python -m evaluation.run_eval --module quality
+
+# 评估指定日期的对话
+python -m evaluation.run_eval --module quality --eval-date 2026-01-29
+
+# 自定义参数
+python -m evaluation.run_eval --module quality \
+  --eval-date 2026-01-29 \
+  --samples 50 \
+  --dqi-threshold 85.0 \
+  --judge-provider openai \
+  --judge-model gpt-4o
+
+# 直接运行质量评估（生成告警报告）
+python -m evaluation.runners.quality_runner \
+  --date 2026-01-29 \
+  --samples 50 \
+  --alert-report
+```
+
 ## 目录结构
 
 ```
@@ -77,6 +130,7 @@ evaluation/
 ├── benchmark/
 │   ├── __init__.py
 │   ├── dataset.py           # 基准数据集管理
+│   ├── conversation_logs.py # 对话日志管理
 │   └── data/
 │       └── benchmark_samples.json  # 100 条固定测试数据
 ├── evaluators/
@@ -85,15 +139,19 @@ evaluation/
 │   ├── llm_evaluator.py     # LLM 评估器
 │   ├── tts_evaluator.py     # TTS 评估器
 │   ├── stt_evaluator.py     # STT 评估器
-│   └── e2e_evaluator.py     # E2E Pipeline 评估器
+│   ├── e2e_evaluator.py     # E2E Pipeline 评估器
+│   └── quality_evaluator.py # LLM-as-a-Judge 质量评估器
 ├── runners/
 │   ├── __init__.py
 │   ├── evaluation_runner.py # 评估运行器
+│   ├── quality_runner.py    # 质量评估运行器
 │   └── comparison_runner.py # 对比测试运行器
-└── reports/
-    ├── __init__.py
-    ├── report_generator.py  # 报告生成器
-    └── results/             # 评估结果输出目录
+├── reports/
+│   ├── __init__.py
+│   ├── report_generator.py  # 报告生成器
+│   └── results/             # 评估结果输出目录
+└── logs/
+    └── daily/               # 每日对话日志（按日期组织）
 ```
 
 ## 使用指南
@@ -104,13 +162,17 @@ evaluation/
 python -m evaluation.run_eval [OPTIONS]
 
 选项:
-  --module, -m {llm,tts,stt,e2e,all}  评估模块 (默认: all)
+  --module, -m {llm,tts,stt,e2e,quality,all}  评估模块 (默认: all)
   --samples, -n INT                   样本数量 (默认: 100)
   --quick, -q                         快速模式 (5 条样本)
   --provider, -p STR                  LLM Provider (ollama/deepseek/openai)
   --compare, -c                       运行对比测试
   --providers STR [STR ...]           对比的 Provider 列表
   --tts-mode {fast,local}             TTS 模式 (默认: fast)
+  --judge-provider STR                Judge LLM Provider (openai/anthropic/ollama)
+  --judge-model STR                   Judge Model (gpt-4o/claude-3-opus)
+  --eval-date STR                     质量评估日期 (YYYY-MM-DD)
+  --dqi-threshold FLOAT               DQI 告警阈值 (默认: 85.0)
   --output, -o STR                    输出目录
   --report, -r [FORMAT ...]           生成报告格式 (json/md/html/txt)
   --verbose, -v                       详细输出

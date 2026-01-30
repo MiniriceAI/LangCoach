@@ -33,21 +33,6 @@ from pydantic import BaseModel
 # Import configuration
 from src.api.config import config
 
-# Database and authentication imports
-from sqlalchemy.orm import Session
-from src.database import init_db, close_db, get_db, User, Conversation, Message, CustomScenario
-from src.database.history import (
-    get_user_conversations,
-    get_conversation_detail,
-    get_recent_conversation_topics,
-    save_conversation_to_db,
-    save_message_to_db,
-    update_conversation_turn,
-    end_conversation
-)
-from src.auth import get_current_user, get_optional_user, verify_user_owns_conversation
-from src.auth.wechat import wechat_login
-
 # ============================================================
 # Logging Configuration
 # ============================================================
@@ -538,46 +523,6 @@ class TranscribeResponse(BaseModel):
     language: str = "en"
 
 
-# Authentication models
-class WeChatAuthRequest(BaseModel):
-    code: str
-    nickname: Optional[str] = None
-    avatar_url: Optional[str] = None
-
-class WeChatAuthResponse(BaseModel):
-    token: str
-    user: Dict[str, Any]
-
-class UserProfileResponse(BaseModel):
-    id: int
-    nickname: str
-    avatar_url: Optional[str]
-    created_at: str
-
-# History models
-class ConversationListResponse(BaseModel):
-    conversations: List[Dict[str, Any]]
-    total: int
-    limit: int
-    offset: int
-
-class ConversationDetailResponse(BaseModel):
-    id: int
-    session_id: str
-    scenario: str
-    difficulty: str
-    max_turns: int
-    current_turn: int
-    status: str
-    created_at: str
-    ended_at: Optional[str]
-    duration: Optional[int]
-    rating: Optional[int]
-    overall_score: Optional[int]
-    messages: List[Dict[str, Any]]
-    custom_scenario: Optional[Dict[str, Any]]
-
-
 
 # ============================================================
 # Session Management
@@ -734,13 +679,6 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan."""
     logger.info("=" * 50)
     logger.info("Starting LangCoach Mini Program API...")
-    # Initialize database
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-
     logger.info("=" * 50)
 
     preload = os.getenv("PRELOAD_MODELS", "false").lower() == "true"
@@ -1599,95 +1537,18 @@ async def _generate_random_scenario_llm() -> RandomScenarioResponse:
 # Auth Endpoint (Placeholder)
 # ============================================================
 
-@app.post("/api/auth/wechat", response_model=WeChatAuthResponse)
-async def wechat_auth(request: WeChatAuthRequest, db: Session = Depends(get_db)):
-    """
-    WeChat Mini Program login endpoint.
+@app.post("/api/auth/wechat")
+async def wechat_auth(code: str = Form(...)):
+    """微信登录（占位实现）"""
+    # 生产环境应验证 code 并调用微信 API
+    token = str(uuid.uuid4())
+    logger.info(f"WeChat auth: code={code[:10]}..., token={token[:10]}...")
 
-    Exchanges WeChat authorization code for user token.
-    Creates new user if first time login.
-    """
-    try:
-        result = await wechat_login(
-            code=request.code,
-            nickname=request.nickname,
-            avatar_url=request.avatar_url,
-            db=db
-        )
-        return result
-    except ValueError as e:
-        logger.error(f"WeChat auth failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"WeChat auth error: {e}")
-        raise HTTPException(status_code=500, detail="Authentication failed")",
+    return {
+        "token": token,
+        "user_id": f"user_{token[:8]}",
         "expires_in": 7200
     }
-
-
-
-@app.get("/api/auth/me", response_model=UserProfileResponse)
-async def get_current_user_profile(current_user: User = Depends(get_current_user)):
-    """Get current user profile information."""
-    return {
-        "id": current_user.id,
-        "nickname": current_user.nickname,
-        "avatar_url": current_user.avatar_url,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
-    }
-
-
-# ============================================================
-# History Endpoints
-# ============================================================
-
-@app.get("/api/history/conversations", response_model=ConversationListResponse)
-async def get_conversation_history(
-    limit: int = 20,
-    offset: int = 0,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get paginated list of user's conversation history.
-
-    Query Parameters:
-    - limit: Maximum number of conversations to return (default: 20)
-    - offset: Number of conversations to skip (default: 0)
-    """
-    try:
-        result = get_user_conversations(db, current_user, limit, offset)
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching conversation history: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch conversation history")
-
-
-@app.get("/api/history/conversations/{conversation_id}", response_model=ConversationDetailResponse)
-async def get_conversation_details(
-    conversation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get detailed information about a specific conversation.
-
-    Includes:
-    - Conversation metadata
-    - All messages
-    - Custom scenario details (if applicable)
-    - Statistics
-    """
-    try:
-        detail = get_conversation_detail(db, current_user, conversation_id)
-        if detail is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        return detail
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching conversation detail: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch conversation detail")
 
 
 # ============================================================

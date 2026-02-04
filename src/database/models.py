@@ -60,6 +60,13 @@ class Conversation(Base):
     overall_score = Column(Integer)  # 0-100
     grammar_score = Column(Integer)  # 0-100
     fluency_score = Column(Integer)  # 0-100
+    vocabulary_score = Column(Integer)  # 0-100
+    task_completion_score = Column(Integer)  # 0-100
+    duration_seconds = Column(Integer)  # Duration in seconds
+    evaluation_strengths = Column(Text)  # What user did well
+    evaluation_improvements = Column(Text)  # Areas to improve
+    evaluation_summary = Column(Text)  # Overall evaluation summary
+    scenario_title = Column(String(200))  # Human-readable scenario title
 
     # Relationships
     user = relationship("User", back_populates="conversations")
@@ -82,16 +89,23 @@ class Conversation(Base):
             "id": self.id,
             "session_id": self.session_id,
             "scenario": self.scenario,
+            "scenario_title": self.scenario_title,
             "difficulty": self.difficulty,
             "max_turns": self.max_turns,
             "current_turn": self.current_turn,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "duration_seconds": self.duration_seconds,
             "rating": self.rating,
             "overall_score": self.overall_score,
             "grammar_score": self.grammar_score,
             "fluency_score": self.fluency_score,
+            "vocabulary_score": self.vocabulary_score,
+            "task_completion_score": self.task_completion_score,
+            "evaluation_strengths": self.evaluation_strengths,
+            "evaluation_improvements": self.evaluation_improvements,
+            "evaluation_summary": self.evaluation_summary,
         }
 
 

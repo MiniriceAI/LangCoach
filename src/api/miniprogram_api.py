@@ -44,7 +44,8 @@ from src.database.history import (
     save_message_to_db,
     update_conversation_turn,
     update_conversation_status,
-    end_conversation
+    end_conversation,
+    delete_conversation
 )
 from src.auth import get_current_user, get_optional_user, verify_user_owns_conversation
 from src.auth.wechat import wechat_login
@@ -566,17 +567,26 @@ class ConversationDetailResponse(BaseModel):
     id: int
     session_id: str
     scenario: str
+    scenario_title: Optional[str] = None
     difficulty: str
     max_turns: int
     current_turn: int
     status: str
     created_at: str
-    ended_at: Optional[str]
-    duration: Optional[int]
-    rating: Optional[int]
-    overall_score: Optional[int]
+    ended_at: Optional[str] = None
+    duration: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    rating: Optional[int] = None
+    overall_score: Optional[int] = None
+    grammar_score: Optional[int] = None
+    fluency_score: Optional[int] = None
+    vocabulary_score: Optional[int] = None
+    task_completion_score: Optional[int] = None
+    evaluation_strengths: Optional[str] = None
+    evaluation_improvements: Optional[str] = None
+    evaluation_summary: Optional[str] = None
     messages: List[Dict[str, Any]]
-    custom_scenario: Optional[Dict[str, Any]]
+    custom_scenario: Optional[Dict[str, Any]] = None
 
 
 
@@ -975,6 +985,23 @@ async def chat_start(
         # 生成开场白的对话提示
         chat_tips = await generate_startup_tips(greeting, scenario, session["difficulty"])
 
+        # 获取场景标题
+        scenario_title = None
+        if request.scenario:
+            # 优先使用 scenarioInfo 中的 scenario_summary_cn
+            if "scenarioInfo" in request.scenario:
+                scenario_title = request.scenario["scenarioInfo"].get("scenario_summary_cn") or \
+                                request.scenario["scenarioInfo"].get("scenario_summary")
+            # 其次使用 title 字段
+            if not scenario_title:
+                scenario_title = request.scenario.get("title")
+        # 如果没有自定义标题，使用场景名称格式化
+        if not scenario_title:
+            scenario_title = scenario.replace("_", " ").title()
+
+        # 保存场景标题到会话
+        session["scenario_title"] = scenario_title
+
         # 如果用户已登录，保存会话到数据库
         if current_user:
             try:
@@ -984,7 +1011,8 @@ async def chat_start(
                     session_id=session["id"],
                     scenario=scenario,
                     difficulty=session["difficulty"],
-                    max_turns=request.turns
+                    max_turns=request.turns,
+                    scenario_title=scenario_title
                 )
                 session["db_conversation_id"] = db_conversation.id
                 session["user_id"] = current_user.id
@@ -1223,6 +1251,85 @@ async def chat_feedback(request: ChatFeedbackRequest):
     return {"success": True, "message": "Feedback submitted"}
 
 
+class ChatEndRequest(BaseModel):
+    """结束对话请求"""
+    session_id: str
+
+
+class ChatEndResponse(BaseModel):
+    """结束对话响应"""
+    success: bool
+    evaluation: Optional[Dict[str, Any]] = None
+    message: str = ""
+
+
+@app.post("/api/chat/end", response_model=ChatEndResponse)
+async def chat_end(request: ChatEndRequest, db: Session = Depends(get_db)):
+    """手动结束对话并生成评价"""
+    try:
+        session = get_session(request.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session.get("ended"):
+            return ChatEndResponse(
+                success=True,
+                message="Session already ended"
+            )
+
+        # 标记会话结束
+        session["ended"] = True
+
+        # 计算对话时长
+        created_at = session.get("created_at")
+        duration_seconds = 0
+        if created_at:
+            from datetime import datetime
+            try:
+                start_time = datetime.fromisoformat(created_at)
+                duration_seconds = int((datetime.now() - start_time).total_seconds())
+            except:
+                pass
+
+        # 使用LLM生成评价
+        evaluation = await generate_conversation_evaluation(session, duration_seconds)
+
+        # 更新数据库
+        db_conversation_id = session.get("db_conversation_id")
+        if db_conversation_id:
+            try:
+                update_conversation_status(
+                    db=db,
+                    conversation_id=db_conversation_id,
+                    status="completed",
+                    grammar_score=evaluation["grammar_score"],
+                    fluency_score=evaluation["fluency_score"],
+                    vocabulary_score=evaluation["vocabulary_score"],
+                    task_completion_score=evaluation["task_completion_score"],
+                    overall_score=evaluation["overall_score"],
+                    total_turns=session["current_turn"],
+                    duration_seconds=duration_seconds,
+                    evaluation_strengths=evaluation["strengths"],
+                    evaluation_improvements=evaluation["improvements"],
+                    evaluation_summary=evaluation["summary"]
+                )
+                logger.info(f"Updated conversation {db_conversation_id} with evaluation")
+            except Exception as e:
+                logger.error(f"Failed to update conversation with evaluation: {e}")
+
+        return ChatEndResponse(
+            success=True,
+            evaluation=evaluation,
+            message="Conversation ended successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error ending conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================
 # Speech Endpoints
 # ============================================================
@@ -1417,6 +1524,106 @@ async def generate_startup_tips(greeting: str, scenario: str, difficulty: str) -
     except Exception as e:
         logger.error(f"Error generating startup tips: {e}")
         return None
+
+
+async def generate_conversation_evaluation(
+    session: Dict[str, Any],
+    duration_seconds: int
+) -> Dict[str, Any]:
+    """使用LLM生成对话评价
+
+    Args:
+        session: 会话数据，包含消息历史
+        duration_seconds: 对话时长（秒）
+
+    Returns:
+        评价结果字典
+    """
+    default_evaluation = {
+        "grammar_score": 70,
+        "vocabulary_score": 70,
+        "fluency_score": 70,
+        "task_completion_score": 70,
+        "overall_score": 70,
+        "strengths": "完成了基本对话练习。",
+        "improvements": "继续练习以提高流利度。",
+        "summary": "本次对话练习表现良好，继续加油！"
+    }
+
+    try:
+        llm = get_llm_service()
+        if not llm:
+            logger.warning("LLM service not available for evaluation")
+            return default_evaluation
+
+        # 构建对话记录
+        messages = session.get("messages", [])
+        if len(messages) < 2:
+            logger.info("Not enough messages for evaluation")
+            return default_evaluation
+
+        # 只取用户消息进行评价
+        user_messages = [m for m in messages if m.get("role") == "user"]
+        if not user_messages:
+            return default_evaluation
+
+        # 构建对话记录文本
+        conversation_transcript = ""
+        for msg in messages:
+            role = "User" if msg.get("role") == "user" else "AI Tutor"
+            conversation_transcript += f"{role}: {msg.get('content', '')}\n"
+
+        # 加载评价prompt
+        prompt_template = load_prompt_file("conversation_evaluation_prompt.txt")
+
+        # 获取场景标题
+        scenario = session.get("scenario", "general conversation")
+        scenario_title = session.get("scenario_title", scenario)
+
+        prompt = prompt_template.format(
+            scenario=scenario_title,
+            difficulty=session.get("difficulty", "medium"),
+            total_turns=session.get("current_turn", len(user_messages)),
+            duration_minutes=duration_seconds // 60 if duration_seconds else 0,
+            conversation_transcript=conversation_transcript
+        )
+
+        logger.info(f"Generating evaluation for conversation with {len(messages)} messages")
+
+        # 调用LLM
+        response = llm.invoke(prompt)
+        raw_response = response.content.strip()
+
+        logger.info(f"Evaluation response: {raw_response[:200]}...")
+
+        # 解析JSON响应
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', raw_response)
+        if json_match:
+            json_str = json_match.group()
+            evaluation = json.loads(json_str)
+
+            # 确保所有字段都存在
+            result = {
+                "grammar_score": int(evaluation.get("grammar_score", 70)),
+                "vocabulary_score": int(evaluation.get("vocabulary_score", 70)),
+                "fluency_score": int(evaluation.get("fluency_score", 70)),
+                "task_completion_score": int(evaluation.get("task_completion_score", 70)),
+                "overall_score": int(evaluation.get("overall_score", 70)),
+                "strengths": evaluation.get("strengths", default_evaluation["strengths"]),
+                "improvements": evaluation.get("improvements", default_evaluation["improvements"]),
+                "summary": evaluation.get("summary", default_evaluation["summary"])
+            }
+
+            logger.info(f"Evaluation generated: overall_score={result['overall_score']}")
+            return result
+
+        logger.warning("No valid JSON found in evaluation response")
+        return default_evaluation
+
+    except Exception as e:
+        logger.error(f"Error generating evaluation: {e}")
+        return default_evaluation
 
 
 @app.post("/api/custom-scenario/extract", response_model=CustomScenarioExtractResponse)
@@ -1755,6 +1962,29 @@ async def get_conversation_details(
     except Exception as e:
         logger.error(f"Error fetching conversation detail: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch conversation detail")
+
+
+@app.delete("/api/history/conversations/{conversation_id}")
+async def delete_conversation_endpoint(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a conversation and all its messages.
+
+    Only the owner of the conversation can delete it.
+    """
+    try:
+        success = delete_conversation(db, current_user, conversation_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"success": True, "message": "Conversation deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete conversation")
 
 
 # ============================================================

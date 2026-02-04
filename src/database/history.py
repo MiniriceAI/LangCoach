@@ -54,14 +54,21 @@ def get_user_conversations(
             "id": conv.id,
             "session_id": conv.session_id,
             "scenario": conv.scenario,
+            "scenario_title": conv.scenario_title,
             "difficulty": conv.difficulty,
             "date": conv.created_at.isoformat() if conv.created_at else None,
             "duration": duration_minutes,
+            "duration_seconds": conv.duration_seconds,
             "turns": conv.current_turn,
             "max_turns": conv.max_turns,
             "status": conv.status,
             "rating": conv.rating,
             "overall_score": conv.overall_score,
+            "grammar_score": conv.grammar_score,
+            "fluency_score": conv.fluency_score,
+            "vocabulary_score": conv.vocabulary_score,
+            "task_completion_score": conv.task_completion_score,
+            "evaluation_summary": conv.evaluation_summary,
         }
 
         # Include custom scenario info if available
@@ -124,6 +131,7 @@ def get_conversation_detail(
         "id": conversation.id,
         "session_id": conversation.session_id,
         "scenario": conversation.scenario,
+        "scenario_title": conversation.scenario_title,
         "difficulty": conversation.difficulty,
         "max_turns": conversation.max_turns,
         "current_turn": conversation.current_turn,
@@ -131,8 +139,16 @@ def get_conversation_detail(
         "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
         "ended_at": conversation.ended_at.isoformat() if conversation.ended_at else None,
         "duration": duration_minutes,
+        "duration_seconds": conversation.duration_seconds,
         "rating": conversation.rating,
         "overall_score": conversation.overall_score,
+        "grammar_score": conversation.grammar_score,
+        "fluency_score": conversation.fluency_score,
+        "vocabulary_score": conversation.vocabulary_score,
+        "task_completion_score": conversation.task_completion_score,
+        "evaluation_strengths": conversation.evaluation_strengths,
+        "evaluation_improvements": conversation.evaluation_improvements,
+        "evaluation_summary": conversation.evaluation_summary,
         "messages": messages_data,
         "custom_scenario": conversation.custom_scenario.to_dict() if conversation.custom_scenario else None,
     }
@@ -190,6 +206,7 @@ def save_conversation_to_db(
     scenario: str,
     difficulty: str,
     max_turns: int,
+    scenario_title: Optional[str] = None,
     custom_scenario_data: Optional[Dict[str, Any]] = None
 ) -> Conversation:
     """
@@ -202,6 +219,7 @@ def save_conversation_to_db(
         scenario: Scenario name
         difficulty: Difficulty level
         max_turns: Maximum number of turns
+        scenario_title: Human-readable scenario title
         custom_scenario_data: Optional custom scenario extraction data
 
     Returns:
@@ -212,6 +230,7 @@ def save_conversation_to_db(
         user_id=user_id,
         session_id=session_id,
         scenario=scenario,
+        scenario_title=scenario_title,
         difficulty=difficulty,
         max_turns=max_turns,
         current_turn=0,
@@ -319,7 +338,14 @@ def update_conversation_status(
     status: str = "completed",
     grammar_score: Optional[int] = None,
     fluency_score: Optional[int] = None,
-    total_turns: Optional[int] = None
+    vocabulary_score: Optional[int] = None,
+    task_completion_score: Optional[int] = None,
+    overall_score: Optional[int] = None,
+    total_turns: Optional[int] = None,
+    duration_seconds: Optional[int] = None,
+    evaluation_strengths: Optional[str] = None,
+    evaluation_improvements: Optional[str] = None,
+    evaluation_summary: Optional[str] = None
 ) -> Optional[Conversation]:
     """
     Update conversation status and scores.
@@ -330,7 +356,14 @@ def update_conversation_status(
         status: New status (e.g., 'completed', 'ended')
         grammar_score: Optional grammar score
         fluency_score: Optional fluency score
+        vocabulary_score: Optional vocabulary score
+        task_completion_score: Optional task completion score
+        overall_score: Optional overall score
         total_turns: Optional total turns count
+        duration_seconds: Optional duration in seconds
+        evaluation_strengths: Optional strengths text
+        evaluation_improvements: Optional improvements text
+        evaluation_summary: Optional summary text
 
     Returns:
         Updated Conversation object or None if not found
@@ -350,15 +383,58 @@ def update_conversation_status(
         conversation.grammar_score = grammar_score
     if fluency_score is not None:
         conversation.fluency_score = fluency_score
+    if vocabulary_score is not None:
+        conversation.vocabulary_score = vocabulary_score
+    if task_completion_score is not None:
+        conversation.task_completion_score = task_completion_score
+    if overall_score is not None:
+        conversation.overall_score = overall_score
     if total_turns is not None:
         conversation.current_turn = total_turns
-
-    # Calculate overall score as average of grammar and fluency
-    if grammar_score is not None and fluency_score is not None:
-        conversation.overall_score = (grammar_score + fluency_score) // 2
+    if duration_seconds is not None:
+        conversation.duration_seconds = duration_seconds
+    if evaluation_strengths is not None:
+        conversation.evaluation_strengths = evaluation_strengths
+    if evaluation_improvements is not None:
+        conversation.evaluation_improvements = evaluation_improvements
+    if evaluation_summary is not None:
+        conversation.evaluation_summary = evaluation_summary
 
     db.commit()
     db.refresh(conversation)
 
     logger.info(f"Updated conversation {conversation_id} status to {status}")
     return conversation
+
+
+def delete_conversation(
+    db: Session,
+    user: User,
+    conversation_id: int
+) -> bool:
+    """
+    Delete a conversation and all its messages.
+
+    Args:
+        db: Database session
+        user: User object (for ownership verification)
+        conversation_id: Conversation ID to delete
+
+    Returns:
+        True if deleted, False if not found or not owned by user
+    """
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user.id
+    ).first()
+
+    if not conversation:
+        logger.warning(f"Conversation {conversation_id} not found or not owned by user {user.id}")
+        return False
+
+    # Delete conversation (cascade will delete messages and custom_scenario)
+    db.delete(conversation)
+    db.commit()
+
+    logger.info(f"Deleted conversation {conversation_id} for user {user.id}")
+    return True

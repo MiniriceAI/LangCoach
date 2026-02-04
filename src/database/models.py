@@ -58,6 +58,8 @@ class Conversation(Base):
     ended_at = Column(DateTime, index=True)
     rating = Column(Integer)  # 1-5 stars
     overall_score = Column(Integer)  # 0-100
+    grammar_score = Column(Integer)  # 0-100
+    fluency_score = Column(Integer)  # 0-100
 
     # Relationships
     user = relationship("User", back_populates="conversations")
@@ -88,6 +90,8 @@ class Conversation(Base):
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "rating": self.rating,
             "overall_score": self.overall_score,
+            "grammar_score": self.grammar_score,
+            "fluency_score": self.fluency_score,
         }
 
 

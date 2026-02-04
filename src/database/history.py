@@ -134,11 +134,8 @@ def get_conversation_detail(
         "rating": conversation.rating,
         "overall_score": conversation.overall_score,
         "messages": messages_data,
+        "custom_scenario": conversation.custom_scenario.to_dict() if conversation.custom_scenario else None,
     }
-
-    # Include custom scenario details if available
-    if conversation.custom_scenario:
-        detail["custom_scenario"] = conversation.custom_scenario.to_dict()
 
     return detail
 
@@ -188,7 +185,7 @@ def get_recent_conversation_topics(
 
 def save_conversation_to_db(
     db: Session,
-    user: User,
+    user_id: int,
     session_id: str,
     scenario: str,
     difficulty: str,
@@ -200,7 +197,7 @@ def save_conversation_to_db(
 
     Args:
         db: Database session
-        user: User object
+        user_id: User ID
         session_id: Unique session identifier
         scenario: Scenario name
         difficulty: Difficulty level
@@ -212,7 +209,7 @@ def save_conversation_to_db(
     """
     # Create conversation
     conversation = Conversation(
-        user_id=user.id,
+        user_id=user_id,
         session_id=session_id,
         scenario=scenario,
         difficulty=difficulty,
@@ -234,13 +231,13 @@ def save_conversation_to_db(
         db.add(custom_scenario)
         db.commit()
 
-    logger.info(f"Created conversation {conversation.id} for user {user.id}")
+    logger.info(f"Created conversation {conversation.id} for user {user_id}")
     return conversation
 
 
 def save_message_to_db(
     db: Session,
-    conversation: Conversation,
+    conversation_id: int,
     role: str,
     content: str,
     audio_url: Optional[str] = None
@@ -250,7 +247,7 @@ def save_message_to_db(
 
     Args:
         db: Database session
-        conversation: Conversation object
+        conversation_id: Conversation ID
         role: Message role ('user' or 'assistant')
         content: Message content
         audio_url: Optional audio URL
@@ -259,7 +256,7 @@ def save_message_to_db(
         Message: Created message object
     """
     message = Message(
-        conversation_id=conversation.id,
+        conversation_id=conversation_id,
         role=role,
         content=content,
         audio_url=audio_url,
@@ -269,7 +266,7 @@ def save_message_to_db(
     db.commit()
     db.refresh(message)
 
-    logger.debug(f"Saved {role} message to conversation {conversation.id}")
+    logger.debug(f"Saved {role} message to conversation {conversation_id}")
     return message
 
 
@@ -314,3 +311,54 @@ def end_conversation(
     db.commit()
 
     logger.info(f"Ended conversation {conversation.id}")
+
+
+def update_conversation_status(
+    db: Session,
+    conversation_id: int,
+    status: str = "completed",
+    grammar_score: Optional[int] = None,
+    fluency_score: Optional[int] = None,
+    total_turns: Optional[int] = None
+) -> Optional[Conversation]:
+    """
+    Update conversation status and scores.
+
+    Args:
+        db: Database session
+        conversation_id: Conversation ID
+        status: New status (e.g., 'completed', 'ended')
+        grammar_score: Optional grammar score
+        fluency_score: Optional fluency score
+        total_turns: Optional total turns count
+
+    Returns:
+        Updated Conversation object or None if not found
+    """
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id
+    ).first()
+
+    if not conversation:
+        logger.warning(f"Conversation {conversation_id} not found for status update")
+        return None
+
+    conversation.status = status
+    conversation.ended_at = datetime.utcnow()
+
+    if grammar_score is not None:
+        conversation.grammar_score = grammar_score
+    if fluency_score is not None:
+        conversation.fluency_score = fluency_score
+    if total_turns is not None:
+        conversation.current_turn = total_turns
+
+    # Calculate overall score as average of grammar and fluency
+    if grammar_score is not None and fluency_score is not None:
+        conversation.overall_score = (grammar_score + fluency_score) // 2
+
+    db.commit()
+    db.refresh(conversation)
+
+    logger.info(f"Updated conversation {conversation_id} status to {status}")
+    return conversation

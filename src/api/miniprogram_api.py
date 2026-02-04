@@ -25,7 +25,7 @@ from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -43,6 +43,7 @@ from src.database.history import (
     save_conversation_to_db,
     save_message_to_db,
     update_conversation_turn,
+    update_conversation_status,
     end_conversation
 )
 from src.auth import get_current_user, get_optional_user, verify_user_owns_conversation
@@ -884,7 +885,11 @@ async def get_audio_file(audio_id: str):
 # ============================================================
 
 @app.post("/api/chat/start", response_model=ChatStartResponse)
-async def chat_start(request: ChatStartRequest):
+async def chat_start(
+    request: ChatStartRequest,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
     """开始新的对话会话"""
     try:
         # 确定场景
@@ -970,6 +975,31 @@ async def chat_start(request: ChatStartRequest):
         # 生成开场白的对话提示
         chat_tips = await generate_startup_tips(greeting, scenario, session["difficulty"])
 
+        # 如果用户已登录，保存会话到数据库
+        if current_user:
+            try:
+                db_conversation = save_conversation_to_db(
+                    db=db,
+                    user_id=current_user.id,
+                    session_id=session["id"],
+                    scenario=scenario,
+                    difficulty=session["difficulty"],
+                    max_turns=request.turns
+                )
+                session["db_conversation_id"] = db_conversation.id
+                session["user_id"] = current_user.id
+                logger.info(f"Saved conversation to DB: {db_conversation.id} for user {current_user.id}")
+
+                # 保存开场白消息到数据库
+                save_message_to_db(
+                    db=db,
+                    conversation_id=db_conversation.id,
+                    role="assistant",
+                    content=greeting
+                )
+            except Exception as e:
+                logger.error(f"Failed to save conversation to DB: {e}")
+
         return ChatStartResponse(
             session_id=session["id"],
             greeting=greeting,
@@ -986,7 +1016,7 @@ async def chat_start(request: ChatStartRequest):
 
 
 @app.post("/api/chat/message", response_model=ChatMessageResponse)
-async def chat_message(request: ChatMessageRequest):
+async def chat_message(request: ChatMessageRequest, db: Session = Depends(get_db)):
     """发送消息并获取 AI 回复"""
     try:
         session = get_session(request.session_id)
@@ -1002,6 +1032,19 @@ async def chat_message(request: ChatMessageRequest):
             "content": request.message,
             "timestamp": datetime.now().isoformat()
         })
+
+        # 保存用户消息到数据库
+        db_conversation_id = session.get("db_conversation_id")
+        if db_conversation_id:
+            try:
+                save_message_to_db(
+                    db=db,
+                    conversation_id=db_conversation_id,
+                    role="user",
+                    content=request.message
+                )
+            except Exception as e:
+                logger.error(f"Failed to save user message to DB: {e}")
 
         # 获取 AI 回复
         scenario = session["scenario"]
@@ -1075,6 +1118,18 @@ Assistant:"""
             "timestamp": datetime.now().isoformat()
         })
 
+        # 保存 AI 回复到数据库
+        if db_conversation_id:
+            try:
+                save_message_to_db(
+                    db=db,
+                    conversation_id=db_conversation_id,
+                    role="assistant",
+                    content=reply
+                )
+            except Exception as e:
+                logger.error(f"Failed to save assistant message to DB: {e}")
+
         # 生成音频URL (只对直接回复生成TTS，使用会话中保存的语速和语音角色)
         speaking_speed = session.get("speaking_speed", "medium")
         # 优先使用请求中的speaker，其次使用会话中的speaker，最后使用默认speaker
@@ -1110,6 +1165,21 @@ Assistant:"""
                 "totalTurns": session["current_turn"],
                 "tips": tips
             }
+
+            # 更新数据库中的会话状态
+            if db_conversation_id:
+                try:
+                    update_conversation_status(
+                        db=db,
+                        conversation_id=db_conversation_id,
+                        status="completed",
+                        grammar_score=scores["grammarScore"],
+                        fluency_score=scores["fluencyScore"],
+                        total_turns=session["current_turn"]
+                    )
+                    logger.info(f"Updated conversation {db_conversation_id} status to completed")
+                except Exception as e:
+                    logger.error(f"Failed to update conversation status: {e}")
 
         return ChatMessageResponse(
             reply=reply,
@@ -1347,7 +1417,6 @@ async def generate_startup_tips(greeting: str, scenario: str, difficulty: str) -
     except Exception as e:
         logger.error(f"Error generating startup tips: {e}")
         return None
-    return _DIFFICULTY_INSTRUCTIONS
 
 
 @app.post("/api/custom-scenario/extract", response_model=CustomScenarioExtractResponse)
@@ -1620,9 +1689,7 @@ async def wechat_auth(request: WeChatAuthRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"WeChat auth error: {e}")
-        raise HTTPException(status_code=500, detail="Authentication failed")",
-        "expires_in": 7200
-    }
+        raise HTTPException(status_code=500, detail="Authentication failed")
 
 
 

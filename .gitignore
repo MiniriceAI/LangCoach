@@ -215,3 +215,4 @@ evaluation/reports/
 
 *.png
 .env
+langcoach.db

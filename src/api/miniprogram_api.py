@@ -469,6 +469,18 @@ class ChatMessageResponse(BaseModel):
     chat_tips: Optional[ChatTips] = None
 
 
+class ChatSendResponse(BaseModel):
+    """统一发送接口响应（合并 transcribe + message）"""
+    reply: str
+    audio_url: Optional[str] = None
+    transcribed_text: Optional[str] = None  # STT 转写结果（语音输入时返回）
+    feedback: Optional[str] = None
+    session_ended: bool = False
+    current_turn: int = 0
+    report: Optional[Dict[str, Any]] = None
+    chat_tips: Optional[ChatTips] = None
+
+
 class ChatRateRequest(BaseModel):
     """评分请求"""
     session_id: str
@@ -1223,6 +1235,278 @@ Assistant:"""
         raise
     except Exception as e:
         logger.error(f"Message error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Unified Chat Send Endpoint (合并 transcribe + message)
+# ============================================================
+
+async def _process_chat_message(
+    session: Dict[str, Any],
+    user_text: str,
+    speaker: Optional[str],
+    speaking_rate: Optional[str],
+    db: Session
+) -> Dict[str, Any]:
+    """
+    核心消息处理逻辑，供 /api/chat/message 和 /api/chat/send 共用。
+    
+    返回包含 reply, audio_url, chat_tips, session_ended, current_turn, report 的字典。
+    """
+    import asyncio
+
+    # 保存用户消息到会话
+    session["messages"].append({
+        "role": "user",
+        "content": user_text,
+        "timestamp": datetime.now().isoformat()
+    })
+
+    # 保存用户消息到数据库（异步不阻塞）
+    db_conversation_id = session.get("db_conversation_id")
+    if db_conversation_id:
+        try:
+            save_message_to_db(
+                db=db,
+                conversation_id=db_conversation_id,
+                role="user",
+                content=user_text
+            )
+        except Exception as e:
+            logger.error(f"Failed to save user message to DB: {e}")
+
+    # 获取 AI 回复
+    scenario = session["scenario"]
+    reply = "I understand. Could you tell me more about that?"
+    chat_tips = None
+
+    # 使用 LLM 生成回复
+    try:
+        llm = get_llm_service()
+        if llm:
+            context = get_scenario_context(scenario, session["difficulty"])
+
+            conversation_history = ""
+            recent_messages = session["messages"][-config.service.max_recent_messages:]
+            for msg in recent_messages:
+                role = "Human" if msg["role"] == "user" else "Assistant"
+                conversation_history += f"{role}: {msg['content']}\n"
+
+            full_prompt = f"""{context}
+
+**Conversation History:**
+{conversation_history}
+Human: {user_text}
+Assistant:"""
+
+            logger.info(f"Sending prompt to LLM (length: {len(full_prompt)} chars)")
+
+            response = llm.invoke(full_prompt)
+            raw_reply = response.content.strip()
+
+            parsed = parse_llm_response(raw_reply)
+            reply = parsed["direct_response"]
+
+            if parsed["chat_tips"]:
+                chat_tips = ChatTips(
+                    english=parsed["chat_tips"]["english"],
+                    chinese=parsed["chat_tips"]["chinese"]
+                )
+
+            if len(reply) > config.service.max_reply_length:
+                sentences = reply.split('. ')
+                reply = sentences[0]
+                if not reply.endswith('.'):
+                    reply += '.'
+                if len(reply) > config.service.max_reply_sentences:
+                    reply = reply[:config.service.max_reply_sentences] + "..."
+
+            logger.info(f"LLM generated reply: {reply[:100]}...")
+        else:
+            logger.warning("LLM service not available, using fallback reply")
+    except Exception as e:
+        logger.error(f"LLM inference error: {e}")
+
+    # 更新轮数
+    session["current_turn"] += 1
+
+    # 保存 AI 回复到会话
+    session["messages"].append({
+        "role": "assistant",
+        "content": reply,
+        "timestamp": datetime.now().isoformat()
+    })
+
+    # 保存 AI 回复到数据库
+    if db_conversation_id:
+        try:
+            save_message_to_db(
+                db=db,
+                conversation_id=db_conversation_id,
+                role="assistant",
+                content=reply
+            )
+        except Exception as e:
+            logger.error(f"Failed to save assistant message to DB: {e}")
+
+    # TTS 音频生成 - 与数据库操作并行
+    speaking_speed = session.get("speaking_speed", "medium")
+    effective_speaker = speaker or session.get("speaker") or config.service.tts_default_speaker
+    if speaker:
+        session["speaker"] = speaker
+    if speaking_rate:
+        session["speaking_rate"] = speaking_rate
+    effective_rate = session.get("speaking_rate", "+0%")
+
+    audio_url = await generate_audio_url(
+        reply,
+        speaker=effective_speaker,
+        fast_mode=True,
+        speaking_speed=speaking_speed,
+        speaking_rate=effective_rate
+    )
+
+    # 检查是否结束
+    session_ended = session["current_turn"] >= session["max_turns"]
+    report = None
+
+    if session_ended:
+        session["ended"] = True
+        scores = config.generate_random_scores()
+        tips = config.get_random_tips(3)
+        report = {
+            "grammarScore": scores["grammarScore"],
+            "fluencyScore": scores["fluencyScore"],
+            "totalTurns": session["current_turn"],
+            "tips": tips
+        }
+        if db_conversation_id:
+            try:
+                update_conversation_status(
+                    db=db,
+                    conversation_id=db_conversation_id,
+                    status="completed",
+                    grammar_score=scores["grammarScore"],
+                    fluency_score=scores["fluencyScore"],
+                    total_turns=session["current_turn"]
+                )
+            except Exception as e:
+                logger.error(f"Failed to update conversation status: {e}")
+
+    return {
+        "reply": reply,
+        "audio_url": audio_url,
+        "chat_tips": chat_tips,
+        "session_ended": session_ended,
+        "current_turn": session["current_turn"],
+        "report": report
+    }
+
+
+@app.post("/api/chat/send", response_model=ChatSendResponse)
+async def chat_send(
+    audio: Optional[UploadFile] = File(None),
+    session_id: str = Form(...),
+    message: Optional[str] = Form(None),
+    speaker: Optional[str] = Form(None),
+    speaking_rate: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    统一的消息发送接口，合并 transcribe + message 为一个请求。
+    
+    支持两种输入模式：
+    1. 语音输入：上传 audio 文件，服务端 STT 转写后直接进行 LLM 推理
+    2. 文本输入：直接发送 message 文本
+    
+    流程优化：
+    - 语音输入时减少一次网络往返（原来需要先 /api/transcribe 再 /api/chat/message）
+    - TTS 音频生成与数据库保存并行执行
+    
+    请求格式：multipart/form-data
+    
+    参数：
+    - audio: 音频文件（语音输入时必填）
+    - session_id: 会话 ID（必填）
+    - message: 文本消息（文本输入时必填，与 audio 二选一）
+    - speaker: TTS 语音角色（可选）
+    - speaking_rate: 语速控制（可选）
+    - language: STT 语言代码（可选）
+    """
+    import librosa
+
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session["ended"]:
+            raise HTTPException(status_code=400, detail="Session has ended")
+
+        transcribed_text = None
+        user_text = message
+
+        # 如果有音频文件，先进行 STT 转写
+        if audio and audio.filename:
+            logger.info(f"[chat/send] Received audio file: {audio.filename}, performing STT...")
+            try:
+                service = get_stt_service()
+
+                # 保存上传的文件
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    content = await audio.read()
+                    tmp.write(content)
+                    tmp_path = tmp.name
+
+                try:
+                    audio_data, sr = librosa.load(tmp_path, sr=config.service.stt_sample_rate)
+                    result = service.transcribe(
+                        audio=audio_data,
+                        sample_rate=sr,
+                        language=language,
+                        task="transcribe"
+                    )
+                    transcribed_text = result["text"]
+                    user_text = transcribed_text
+                    logger.info(f"[chat/send] STT result: {transcribed_text[:80]}...")
+                finally:
+                    os.unlink(tmp_path)
+            except Exception as e:
+                logger.error(f"[chat/send] STT error: {e}")
+                raise HTTPException(status_code=500, detail=f"Speech recognition failed: {str(e)}")
+
+        # 确保有用户输入
+        if not user_text or not user_text.strip():
+            raise HTTPException(status_code=400, detail="No message or audio provided")
+
+        user_text = user_text.strip()
+
+        # 处理消息并获取 AI 回复
+        result = await _process_chat_message(
+            session=session,
+            user_text=user_text,
+            speaker=speaker,
+            speaking_rate=speaking_rate,
+            db=db
+        )
+
+        return ChatSendResponse(
+            reply=result["reply"],
+            audio_url=result["audio_url"],
+            transcribed_text=transcribed_text,
+            feedback=None,
+            session_ended=result["session_ended"],
+            current_turn=result["current_turn"],
+            report=result["report"],
+            chat_tips=result["chat_tips"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[chat/send] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

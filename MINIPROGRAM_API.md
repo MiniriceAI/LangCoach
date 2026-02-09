@@ -147,7 +147,8 @@ curl http://localhost:8600/api/scenarios
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/api/chat/start` | POST | 开始新的对话会话 |
-| `/api/chat/message` | POST | 发送消息并获取 AI 回复 |
+| `/api/chat/send` | POST | **统一发送接口（推荐）** - 合并 transcribe + message |
+| `/api/chat/message` | POST | 发送文本消息并获取 AI 回复（兼容旧接口） |
 | `/api/chat/rate` | POST | 评价会话 |
 | `/api/chat/feedback` | POST | 消息反馈（点赞/踩） |
 
@@ -294,6 +295,61 @@ curl http://localhost:8600/api/scenarios
   }
 }
 ```
+
+---
+
+### 4.1 统一发送接口（推荐）
+
+**POST** `/api/chat/send`
+
+合并 transcribe + message 为一个请求，减少网络往返。支持语音输入和文本输入两种模式。
+
+**请求:** `multipart/form-data`
+
+| 字段 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `session_id` | string | 是 | 会话 ID |
+| `audio` | file | 否 | 音频文件（语音输入时必填，与 message 二选一） |
+| `message` | string | 否 | 文本消息（文本输入时必填，与 audio 二选一） |
+| `speaker` | string | 否 | TTS 语音角色 |
+| `speaking_rate` | string | 否 | 语速控制："-50%", "+0%", "+30%" 等 |
+| `language` | string | 否 | STT 语言代码 |
+
+**语音输入响应示例:**
+```json
+{
+  "reply": "That's great! Could you tell me more about the projects you've worked on?",
+  "audio_url": "/api/audio/550e8400-e29b-41d4-a716-446655440000",
+  "transcribed_text": "I have five years of experience in software development.",
+  "feedback": null,
+  "session_ended": false,
+  "current_turn": 1,
+  "report": null,
+  "chat_tips": {
+    "english": "Could you describe a challenging project?",
+    "chinese": "你能描述一个有挑战性的项目吗？"
+  }
+}
+```
+
+**文本输入响应示例:**
+```json
+{
+  "reply": "That's great! Could you tell me more about the projects you've worked on?",
+  "audio_url": "/api/audio/550e8400-e29b-41d4-a716-446655440000",
+  "transcribed_text": null,
+  "feedback": null,
+  "session_ended": false,
+  "current_turn": 1,
+  "report": null,
+  "chat_tips": null
+}
+```
+
+**优化说明:**
+- 语音输入时减少一次网络往返（原来需要先 `/api/transcribe` 再 `/api/chat/message`）
+- 服务端内部 STT → LLM 推理 → TTS 生成一步完成
+- 配合小程序端客户端 STT（微信同声传译插件），可进一步跳过服务端 STT
 
 ---
 

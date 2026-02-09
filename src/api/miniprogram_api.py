@@ -1373,24 +1373,52 @@ Assistant:"""
 
     if session_ended:
         session["ended"] = True
-        scores = config.generate_random_scores()
-        tips = config.get_random_tips(3)
+        
+        # 计算对话时长
+        created_at = session.get("created_at")
+        duration_seconds = 0
+        if created_at:
+            try:
+                start_time = datetime.fromisoformat(created_at)
+                duration_seconds = int((datetime.now() - start_time).total_seconds())
+            except Exception as e:
+                logger.warning(f"Failed to calculate duration: {e}")
+        
+        # 使用 LLM 生成真实评估
+        logger.info(f"Conversation ended, generating evaluation for session {session.get('db_conversation_id')}")
+        evaluation = await generate_conversation_evaluation(session, duration_seconds)
+        
         report = {
-            "grammarScore": scores["grammarScore"],
-            "fluencyScore": scores["fluencyScore"],
+            "grammarScore": evaluation["grammar_score"],
+            "fluencyScore": evaluation["fluency_score"],
+            "vocabularyScore": evaluation["vocabulary_score"],
+            "taskCompletionScore": evaluation["task_completion_score"],
+            "overallScore": evaluation["overall_score"],
             "totalTurns": session["current_turn"],
-            "tips": tips
+            "tips": [
+                f"✅ 做得好: {evaluation['strengths']}",
+                f"💡 待改进: {evaluation['improvements']}"
+            ]
         }
+        
         if db_conversation_id:
             try:
                 update_conversation_status(
                     db=db,
                     conversation_id=db_conversation_id,
                     status="completed",
-                    grammar_score=scores["grammarScore"],
-                    fluency_score=scores["fluencyScore"],
-                    total_turns=session["current_turn"]
+                    grammar_score=evaluation["grammar_score"],
+                    fluency_score=evaluation["fluency_score"],
+                    vocabulary_score=evaluation["vocabulary_score"],
+                    task_completion_score=evaluation["task_completion_score"],
+                    overall_score=evaluation["overall_score"],
+                    total_turns=session["current_turn"],
+                    duration_seconds=duration_seconds,
+                    evaluation_strengths=evaluation["strengths"],
+                    evaluation_improvements=evaluation["improvements"],
+                    evaluation_summary=evaluation["summary"]
                 )
+                logger.info(f"✅ Saved evaluation for conversation {db_conversation_id}: overall_score={evaluation['overall_score']}")
             except Exception as e:
                 logger.error(f"Failed to update conversation status: {e}")
 
@@ -1872,38 +1900,73 @@ async def generate_conversation_evaluation(
             conversation_transcript=conversation_transcript
         )
 
-        logger.info(f"Generating evaluation for conversation with {len(messages)} messages")
+        logger.info(f"📊 Generating evaluation for conversation:")
+        logger.info(f"  - Messages: {len(messages)}, User messages: {len(user_messages)}")
+        logger.info(f"  - Duration: {duration_seconds}s ({duration_seconds // 60}min)")
+        logger.info(f"  - Scenario: {scenario_title}, Difficulty: {session.get('difficulty')}")
 
         # 调用LLM
         response = llm.invoke(prompt)
         raw_response = response.content.strip()
 
-        logger.info(f"Evaluation response: {raw_response[:200]}...")
+        logger.info(f"📝 LLM evaluation response (first 500 chars):")
+        logger.info(raw_response[:500])
 
-        # 解析JSON响应
+        # 解析JSON响应 - 支持多种格式
         import re
+        evaluation = None
+        
+        # 方法 1: 查找 JSON 对象
         json_match = re.search(r'\{[\s\S]*\}', raw_response)
         if json_match:
-            json_str = json_match.group()
-            evaluation = json.loads(json_str)
+            try:
+                json_str = json_match.group()
+                evaluation = json.loads(json_str)
+                logger.info("✅ Successfully parsed JSON from response")
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode failed (method 1): {e}")
+        
+        # 方法 2: 查找 ```json 代码块
+        if not evaluation:
+            json_block_match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', raw_response)
+            if json_block_match:
+                try:
+                    json_str = json_block_match.group(1)
+                    evaluation = json.loads(json_str)
+                    logger.info("✅ Successfully parsed JSON from code block")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON decode failed (method 2): {e}")
+        
+        if not evaluation:
+            logger.warning(f"❌ No valid JSON found in evaluation response")
+            logger.warning(f"Full response: {raw_response}")
+            return default_evaluation
+        
+        # 验证所有必需字段
+        required_fields = ["grammar_score", "vocabulary_score", "fluency_score", 
+                          "task_completion_score", "overall_score"]
+        for field in required_fields:
+            if field not in evaluation:
+                logger.warning(f"❌ Missing required field: {field}")
+                return default_evaluation
 
-            # 确保所有字段都存在
-            result = {
-                "grammar_score": int(evaluation.get("grammar_score", 70)),
-                "vocabulary_score": int(evaluation.get("vocabulary_score", 70)),
-                "fluency_score": int(evaluation.get("fluency_score", 70)),
-                "task_completion_score": int(evaluation.get("task_completion_score", 70)),
-                "overall_score": int(evaluation.get("overall_score", 70)),
-                "strengths": evaluation.get("strengths", default_evaluation["strengths"]),
-                "improvements": evaluation.get("improvements", default_evaluation["improvements"]),
-                "summary": evaluation.get("summary", default_evaluation["summary"])
-            }
+        # 确保所有字段都存在且在有效范围内
+        result = {
+            "grammar_score": max(0, min(100, int(evaluation.get("grammar_score", 70)))),
+            "vocabulary_score": max(0, min(100, int(evaluation.get("vocabulary_score", 70)))),
+            "fluency_score": max(0, min(100, int(evaluation.get("fluency_score", 70)))),
+            "task_completion_score": max(0, min(100, int(evaluation.get("task_completion_score", 70)))),
+            "overall_score": max(0, min(100, int(evaluation.get("overall_score", 70)))),
+            "strengths": evaluation.get("strengths", default_evaluation["strengths"]),
+            "improvements": evaluation.get("improvements", default_evaluation["improvements"]),
+            "summary": evaluation.get("summary", default_evaluation["summary"])
+        }
 
-            logger.info(f"Evaluation generated: overall_score={result['overall_score']}")
-            return result
-
-        logger.warning("No valid JSON found in evaluation response")
-        return default_evaluation
+        logger.info(f"✅ Evaluation generated successfully:")
+        logger.info(f"  - Overall: {result['overall_score']}, Grammar: {result['grammar_score']}, "
+                   f"Vocabulary: {result['vocabulary_score']}, Fluency: {result['fluency_score']}, "
+                   f"Task: {result['task_completion_score']}")
+        return result
 
     except Exception as e:
         logger.error(f"Error generating evaluation: {e}")

@@ -1,0 +1,69 @@
+You are an expert English language learning evaluator. Analyze the following conversation between a User (English learner) and an AI Language Tutor.
+
+**Context:**
+- Scenario: {scenario}
+- Difficulty Level: {difficulty}
+- Total Turns: {total_turns}
+- Duration: {duration_minutes} minutes
+
+**Conversation Transcript:**
+{conversation_transcript}
+
+---
+
+**Task:** Evaluate the user's English learning performance based on these criteria. Be realistic, fair, and encouraging. Provide honest scores that reflect actual performance.
+
+**Scoring Guidelines:**
+- 90-100: Excellent (优秀) - Near-native proficiency for this level
+- 70-89: Good (良好) - Competent with minor issues
+- 50-69: Fair (及格) - Basic competence with notable gaps
+- 0-49: Needs improvement (需改进) - Significant difficulties
+
+**IMPORTANT:** 
+- Provide realistic scores based on actual performance
+- Avoid giving all the same scores - differentiate between dimensions
+- Consider the stated difficulty level when scoring
+- Be specific in feedback, mention concrete examples when possible
+- Output MUST be valid JSON only, no extra text before or after
+
+**Evaluation Dimensions:**
+
+1. **Grammar Accuracy (grammar_score: 0-100):** Evaluate correctness of verb tenses, subject-verb agreement, articles, prepositions, sentence structure. Look for errors and patterns.
+
+2. **Vocabulary Usage (vocabulary_score: 0-100):** Assess appropriateness of vocabulary for the scenario, diversity (not repetitive), and sophistication level matching the difficulty.
+
+3. **Fluency & Coherence (fluency_score: 0-100):** Evaluate natural flow of responses, logical coherence, ability to maintain conversation. Note: shorter responses or hesitation patterns may indicate lower fluency.
+
+4. **Task Completion (task_completion_score: 0-100):** How well did the user achieve the conversation goal? Did they address the scenario requirements? Did they provide relevant information?
+
+5. **Overall Performance (overall_score: 0-100):** Holistic assessment combining all dimensions. Should be close to the average of the four scores above.
+
+**Output Format (JSON ONLY, no markdown, no extra text):**
+```json
+{
+  "grammar_score": <integer 0-100>,
+  "vocabulary_score": <integer 0-100>,
+  "fluency_score": <integer 0-100>,
+  "task_completion_score": <integer 0-100>,
+  "overall_score": <integer 0-100>,
+  "strengths": "<具体指出用户做得好的地方，用中文，1-2句话，约30-50字>",
+  "improvements": "<具体指出需要改进的地方，用中文，1-2句话，约30-50字>",
+  "summary": "<总体评价，用中文，2-3句话，约50-80字>"
+}
+```
+
+**Example Output:**
+```json
+{
+  "grammar_score": 75,
+  "vocabulary_score": 82,
+  "fluency_score": 68,
+  "task_completion_score": 80,
+  "overall_score": 76,
+  "strengths": "词汇使用较为丰富，能够准确表达关键信息。任务完成度较高，基本达到了对话目标。",
+  "improvements": "语法方面有一些时态错误，建议加强过去时和现在完成时的练习。表达流畅度可以提高，尝试减少停顿和重复。",
+  "summary": "本次对话表现良好，基本达到B1水平要求。词汇量较丰富，但需要注意语法准确性。继续保持词汇积累，同时加强语法和流利度训练，相信会有更大进步。"
+}
+```
+
+**Now evaluate the conversation above. Return ONLY the JSON object, nothing else.**

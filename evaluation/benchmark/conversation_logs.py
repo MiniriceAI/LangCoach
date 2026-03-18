@@ -4,16 +4,22 @@ Conversation Log Management for Quality Evaluation
 Provides utilities for:
 - Storing conversation logs
 - Sampling conversations for evaluation
-- Loading conversation history
+- Loading conversation history from database
 - Exporting logs for analysis
 """
 
+import os
+import sys
 import json
 import random
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
+
+# Add src to path for database imports
+src_path = Path(__file__).parent.parent.parent / "src"
+sys.path.insert(0, str(src_path))
 
 
 @dataclass
@@ -44,15 +50,22 @@ class ConversationLogManager:
     Manager for conversation logs.
 
     Handles storage, retrieval, and sampling of conversation logs
-    for quality evaluation.
+    for quality evaluation. Supports both file-based and database storage.
     """
 
-    def __init__(self, log_dir: Optional[str] = None):
+    def __init__(
+        self, 
+        log_dir: Optional[str] = None,
+        use_database: bool = True,
+        db_url: Optional[str] = None
+    ):
         """
         Initialize log manager.
 
         Args:
             log_dir: Directory for storing logs. Defaults to evaluation/logs
+            use_database: Whether to use database for reading conversations (recommended)
+            db_url: Database URL. If None, uses DATABASE_URL env var
         """
         if log_dir is None:
             log_dir = Path(__file__).parent.parent / "logs"
@@ -63,6 +76,33 @@ class ConversationLogManager:
         # Organize logs by date
         self.daily_dir = self.log_dir / "daily"
         self.daily_dir.mkdir(exist_ok=True)
+        
+        # Database connection (Phase 2 enhancement)
+        self.use_database = use_database
+        self.db_url = db_url or os.getenv("DATABASE_URL", "sqlite:///./langcoach.db")
+        self._db_session = None
+        
+        if self.use_database:
+            self._init_database()
+    
+    def _init_database(self):
+        """Initialize database connection."""
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from dotenv import load_dotenv
+            
+            load_dotenv()
+            
+            engine = create_engine(self.db_url)
+            SessionLocal = sessionmaker(bind=engine)
+            self._db_session = SessionLocal()
+            print(f"✓ Connected to database: {self.db_url}")
+        except Exception as e:
+            print(f"⚠ Database connection failed: {e}")
+            print(f"  Falling back to file-based storage")
+            self.use_database = False
+            self._db_session = None
 
     def save_conversation(self, conversation: ConversationLog) -> str:
         """
@@ -120,6 +160,8 @@ class ConversationLogManager:
     def get_conversations_by_date(self, date: str) -> List[ConversationLog]:
         """
         Get all conversations for a specific date.
+        
+        Prioritizes database if available, falls back to file storage.
 
         Args:
             date: Date string (YYYY-MM-DD)
@@ -127,6 +169,84 @@ class ConversationLogManager:
         Returns:
             List of ConversationLog objects
         """
+        # Try database first (recommended)
+        if self.use_database and self._db_session:
+            try:
+                return self._get_conversations_from_database(date)
+            except Exception as e:
+                print(f"⚠ Database query failed: {e}, falling back to files")
+        
+        # Fallback to file-based storage
+        return self._get_conversations_from_files(date)
+    
+    def _get_conversations_from_database(self, date: str) -> List[ConversationLog]:
+        """Get conversations from database."""
+        from src.database.models import Conversation, Message
+        
+        # Query conversations for the specified date
+        start_datetime = f"{date} 00:00:00"
+        end_datetime = f"{date} 23:59:59"
+        
+        conversations = self._db_session.query(Conversation).filter(
+            Conversation.created_at >= start_datetime,
+            Conversation.created_at < end_datetime,
+            Conversation.status == "ended"  # Only completed conversations
+        ).all()
+        
+        if not conversations:
+            return []
+        
+        # Convert to ConversationLog format
+        logs = []
+        for conv in conversations:
+            # Get messages for this conversation
+            messages = self._db_session.query(Message).filter(
+                Message.conversation_id == conv.id
+            ).order_by(Message.timestamp).all()
+            
+            # Build turns from messages (pair user and assistant messages)
+            turns = []
+            user_msg = None
+            for msg in messages:
+                if msg.role == "user":
+                    user_msg = msg
+                elif msg.role == "assistant" and user_msg:
+                    turns.append({
+                        "user_input": user_msg.content,
+                        "ai_response": msg.content,
+                        "timestamp": user_msg.timestamp.isoformat(),
+                        "correction_enabled": conv.correction_enabled or False
+                    })
+                    user_msg = None
+            
+            # Create ConversationLog
+            log = ConversationLog(
+                session_id=conv.session_id,
+                user_id=str(conv.user_id),
+                scenario=conv.scenario,
+                difficulty=conv.difficulty,
+                turn_limit=conv.max_turns,
+                timestamp=conv.created_at.isoformat(),
+                turns=turns,
+                system_prompt=conv.system_prompt or "",
+                metadata={
+                    "duration_seconds": conv.duration_seconds,
+                    "overall_score": conv.overall_score,
+                    "grammar_score": conv.grammar_score,
+                    "fluency_score": conv.fluency_score,
+                    "vocabulary_score": conv.vocabulary_score,
+                    "task_completion_score": conv.task_completion_score,
+                    "scenario_title": conv.scenario_title,
+                    "correction_enabled": conv.correction_enabled
+                }
+            )
+            logs.append(log)
+        
+        print(f"✓ Loaded {len(logs)} conversations from database for {date}")
+        return logs
+    
+    def _get_conversations_from_files(self, date: str) -> List[ConversationLog]:
+        """Get conversations from file storage (legacy)."""
         date_dir = self.daily_dir / date
         if not date_dir.exists():
             return []
@@ -138,7 +258,7 @@ class ConversationLogManager:
                     data = json.load(f)
                 conversations.append(ConversationLog.from_dict(data))
             except Exception as e:
-                print(f"Warning: Failed to load {filepath}: {e}")
+                print(f"⚠ Failed to load {filepath}: {e}")
 
         return conversations
 

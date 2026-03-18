@@ -207,7 +207,9 @@ def save_conversation_to_db(
     difficulty: str,
     max_turns: int,
     scenario_title: Optional[str] = None,
-    custom_scenario_data: Optional[Dict[str, Any]] = None
+    custom_scenario_data: Optional[Dict[str, Any]] = None,
+    system_prompt: Optional[str] = None,
+    correction_enabled: bool = False
 ) -> Conversation:
     """
     Create a new conversation record in the database.
@@ -221,6 +223,8 @@ def save_conversation_to_db(
         max_turns: Maximum number of turns
         scenario_title: Human-readable scenario title
         custom_scenario_data: Optional custom scenario extraction data
+        system_prompt: System prompt used for this conversation
+        correction_enabled: Whether error correction is enabled
 
     Returns:
         Conversation: Created conversation object
@@ -235,7 +239,9 @@ def save_conversation_to_db(
         max_turns=max_turns,
         current_turn=0,
         status="active",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
+        system_prompt=system_prompt,
+        correction_enabled=correction_enabled
     )
     db.add(conversation)
     db.commit()

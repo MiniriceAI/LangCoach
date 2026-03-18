@@ -67,6 +67,10 @@ class Conversation(Base):
     evaluation_improvements = Column(Text)  # Areas to improve
     evaluation_summary = Column(Text)  # Overall evaluation summary
     scenario_title = Column(String(200))  # Human-readable scenario title
+    
+    # Quality evaluation fields (Phase 2)
+    system_prompt = Column(Text)  # System prompt used for this conversation
+    correction_enabled = Column(Boolean, default=False)  # Whether error correction was enabled
 
     # Relationships
     user = relationship("User", back_populates="conversations")
@@ -106,6 +110,8 @@ class Conversation(Base):
             "evaluation_strengths": self.evaluation_strengths,
             "evaluation_improvements": self.evaluation_improvements,
             "evaluation_summary": self.evaluation_summary,
+            "system_prompt": self.system_prompt,
+            "correction_enabled": self.correction_enabled,
         }
 
 

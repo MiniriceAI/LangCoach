@@ -944,6 +944,7 @@ async def chat_start(
             greeting = config.content.default_greetings.get(scenario, config.content.default_greetings["default"])
 
         # 尝试使用 Agent 获取开场白（仅对非自定义场景）
+        agent = None  # 初始化 agent 变量
         if not is_custom_scenario and scenario in config.content.available_scenarios:
             try:
                 agent = get_agent(scenario)
@@ -1017,6 +1018,15 @@ async def chat_start(
         # 如果用户已登录，保存会话到数据库
         if current_user:
             try:
+                # 获取 system_prompt（如果 agent 存在）
+                system_prompt = None
+                correction_enabled = False
+                if agent and hasattr(agent, 'prompt_template'):
+                    try:
+                        system_prompt = agent.prompt_template
+                    except:
+                        pass
+                
                 db_conversation = save_conversation_to_db(
                     db=db,
                     user_id=current_user.id,
@@ -1024,7 +1034,9 @@ async def chat_start(
                     scenario=scenario,
                     difficulty=session["difficulty"],
                     max_turns=request.turns,
-                    scenario_title=scenario_title
+                    scenario_title=scenario_title,
+                    system_prompt=system_prompt,
+                    correction_enabled=correction_enabled
                 )
                 session["db_conversation_id"] = db_conversation.id
                 session["user_id"] = current_user.id
@@ -1626,6 +1638,47 @@ async def chat_end(request: ChatEndRequest, db: Session = Depends(get_db)):
                     evaluation_summary=evaluation["summary"]
                 )
                 logger.info(f"Updated conversation {db_conversation_id} with evaluation")
+                
+                # Phase 2: 保存对话摘要到 Milvus（长期记忆）
+                try:
+                    from src.agents.long_term_memory import get_memory_instance
+                    memory = get_memory_instance()
+                    
+                    if memory and memory.is_connected:
+                        # 生成对话摘要
+                        summary = f"Scenario: {session.get('scenario', 'unknown')}. " \
+                                f"Difficulty: {session.get('difficulty', 'medium')}. " \
+                                f"Summary: {evaluation['summary']}"
+                        
+                        # 准备元数据
+                        metadata = {
+                            "difficulty": session.get("difficulty", "medium"),
+                            "scenario": session.get("scenario", "unknown"),
+                            "turns": session["current_turn"],
+                            "overall_score": evaluation["overall_score"],
+                            "duration_seconds": duration_seconds
+                        }
+                        
+                        # 存储到 Milvus
+                        success = memory.store_conversation_summary(
+                            user_id=str(session.get("user_id", "anonymous")),
+                            session_id=request.session_id,
+                            scenario=session.get("scenario", "unknown"),
+                            summary=summary,
+                            metadata=metadata
+                        )
+                        
+                        if success:
+                            logger.info(f"Saved conversation summary to Milvus for session {request.session_id}")
+                        else:
+                            logger.warning(f"Failed to save conversation summary to Milvus")
+                    else:
+                        logger.debug("Milvus not connected, skipping long-term memory storage")
+                        
+                except Exception as milvus_error:
+                    # Milvus 错误不应影响主流程
+                    logger.warning(f"Failed to save to Milvus (non-critical): {milvus_error}")
+                
             except Exception as e:
                 logger.error(f"Failed to update conversation with evaluation: {e}")
 

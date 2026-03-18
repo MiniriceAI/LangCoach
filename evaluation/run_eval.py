@@ -68,7 +68,7 @@ Examples:
     # Module selection
     parser.add_argument(
         "--module", "-m",
-        choices=["llm", "tts", "stt", "e2e", "all"],
+        choices=["llm", "tts", "stt", "e2e", "quality", "all"],
         default="all",
         help="Module to evaluate (default: all)"
     )
@@ -93,6 +93,35 @@ Examples:
         type=str,
         default=None,
         help="LLM provider (ollama, deepseek, openai)"
+    )
+
+    # Quality evaluation options
+    parser.add_argument(
+        "--judge-provider",
+        type=str,
+        default=None,
+        help="Judge LLM provider for quality evaluation (openai, anthropic, ollama)"
+    )
+
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=None,
+        help="Judge model for quality evaluation (e.g., gpt-4o, claude-3-opus)"
+    )
+
+    parser.add_argument(
+        "--eval-date",
+        type=str,
+        default=None,
+        help="Date for quality evaluation (YYYY-MM-DD). Default: yesterday"
+    )
+
+    parser.add_argument(
+        "--dqi-threshold",
+        type=float,
+        default=85.0,
+        help="DQI threshold for quality alerts (default: 85.0)"
     )
 
     # Comparison mode
@@ -210,6 +239,22 @@ Examples:
                 args.samples, args.provider, args.tts_mode == "fast", verbose
             )
             results = {"e2e": result}
+        elif args.module == "quality":
+            # Run quality evaluation
+            from runners.quality_runner import QualityEvaluationRunner
+
+            quality_runner = QualityEvaluationRunner(
+                output_dir=args.output,
+                judge_provider=args.judge_provider,
+                judge_model=args.judge_model,
+            )
+            result = quality_runner.run_daily_evaluation(
+                date=args.eval_date,
+                n_samples=args.samples or 50,
+                dqi_threshold=args.dqi_threshold,
+                verbose=verbose
+            )
+            results = {"quality": result}
         else:
             results = runner.run_full_evaluation(args.samples, args.provider, verbose)
 
